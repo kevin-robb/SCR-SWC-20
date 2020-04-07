@@ -1,0 +1,7 @@
+<launch>
+    <!-- Set up the bridge to the simulator -->
+    <include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch" />
+
+    <!-- Robot control node (Python2) -->
+    <node pkg="swc_control" type="control_node.py" name="control_node" output="screen" />
+</launch>
