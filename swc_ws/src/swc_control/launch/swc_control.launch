@@ -1,0 +1,11 @@
+<launch>
+    <!-- Set up the bridge to the simulator -->
+    <include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch" />
+
+    <!-- robot control node -->
+    <node pkg="swc_control" type="control_node.py" name="control_node" output="screen" />
+    <!-- path planning node -->
+    <node pkg="swc_nav" type="path_node.py" name="path_node" output="screen" />
+    <!-- localization node -->
+    <node pkg="swc_localization" type="localization_node.py" name="localization_node" output="screen" />
+</launch>
