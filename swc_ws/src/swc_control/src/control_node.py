@@ -11,7 +11,7 @@ control_pub = None
 
 def get_turn_angle(turn):
     control_msg = Control()
-    control_msg.speed = 1 # for now, keep speed constant at 1
+    control_msg.speed = 1.5 # for now, keep speed constant at 1
     control_msg.turn_angle = degrees(turn.data) # turn.data is in radians
     control_pub.publish(control_msg)
 

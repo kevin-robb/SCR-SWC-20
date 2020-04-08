@@ -14,7 +14,7 @@ desired_heading = 0
 
 def get_current_heading(heading):
     global robot_heading
-    robot_heading = heading.data
+    robot_heading = heading.data - pi
 
 def get_desired_location(rel_goal_gps):
     global desired_heading
@@ -27,14 +27,19 @@ def get_desired_location(rel_goal_gps):
         desired_heading += pi
 
 def timer_callback(event): 
+    P = 1
     # TODO do a better thing, maybe pure pursuit with waypoints
     # TODO add PID or just P to make it smoother
     turn_angle = Float32()
-    turn_angle.data = desired_heading - robot_heading
+    # turn_angle.data = (desired_heading - robot_heading) * P
+    turn_angle.data = -(desired_heading - robot_heading) * P
     # normalize to (-pi, pi)
     turn_angle.data = (turn_angle.data + pi) % (2*pi) - pi
     turn_pub.publish(turn_angle)
     # for now don't worry about speed
+    # TODO DEBUG
+    print(desired_heading)
+    print(robot_heading)
 
 def main():
     global turn_pub
