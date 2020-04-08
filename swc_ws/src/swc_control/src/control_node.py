@@ -1,23 +1,18 @@
 #!/usr/bin/env python
 
 import rospy
-import math
-from swc_msgs.msg import Control, Gps
+from math import degrees
+from std_msgs.msg import Float32
+from swc_msgs.msg import Control
 
 control_pub = None
 
-def get_desired_location(rel_goal_loc_gps):
-    # TODO figure out how to get to the desired location and turn that into commands
-    # (possibly in a different, new node)
-    goal_gps = rel_goal_loc_gps
+# TODO check for obstacles to override commands with reactive avoidance
 
-def timer_callback(event):
-    # TODO make an actual command using the desired relative location from /swc/goal
+def get_turn_angle(turn):
     control_msg = Control()
-    #control_msg.speed = 1
-    #control_msg.turn_angle = 15
-
-    # Publish the message to /sim/control so the simulator receives it
+    control_msg.speed = 1 # for now, keep speed constant at 1
+    control_msg.turn_angle = degrees(turn.data) # turn.data is in radians
     control_pub.publish(control_msg)
 
 def main():
@@ -26,16 +21,13 @@ def main():
     # Initalize our node in ROS
     rospy.init_node('control_node')
 
-    # Create a Publisher that we can use to publish messages to the /sim/control topic
+    # Create publisher for the command messages
     control_pub = rospy.Publisher("/sim/control", Control, queue_size=1)
 
-    # Create a Subscriber that will get the relative desired location
-    goal_sub = rospy.Subscriber("/swc/goal", Gps, get_desired_location, queue_size=1)
+    # Create subscriber for nav's commanded turn angle
+    turn_sub = rospy.Subscriber("/swc/turn_cmd", Float32, get_turn_angle, queue_size=1)
 
-    # Create a timer that calls timer_callback() with a period of 0.1 (10 Hz)
-    rospy.Timer(rospy.Duration(0.1), timer_callback)
-
-    # Let ROS take control of this thread until a ROS wants to kill
+    # pump callbacks
     rospy.spin()
 
 
