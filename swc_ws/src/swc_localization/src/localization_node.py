@@ -38,6 +38,8 @@ def update_gps(gps_reading):
     rel_gps.longitude = goal_gps.longitude - robot_gps.longitude
     # Publish the relative location of the goal
     loc_pub.publish(rel_gps)
+    # TODO DEBUG
+    #print(rel_gps)
 
 # similar function to beebotics' reactive_node.py/get_current_heading()
 def update_heading(imu_data):
