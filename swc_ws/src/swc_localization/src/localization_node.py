@@ -20,7 +20,7 @@ goal_gps = Gps()
 wp_interpreted = False
 # keep track of which waypoints have been visited
 visited = [False, False, False]
-error_margin = 0.00001
+error_margin = 0.000001
 
 def interpret_waypoints(waypoints):
     global start_gps, bonus_gps, goal_gps, visited, wp_interpreted
@@ -47,11 +47,9 @@ def arrived_at_point(point_gps):
 def update_robot_gps(gps_reading):
     global robot_gps, visited
     robot_gps = gps_reading
-    print("got robot gps")
     # check all the bonus waypoints to see if visited.
     # make sure the waypoints have been interpreted first.
     if wp_interpreted:
-        #print("checking if points visited")
         if not visited[0]:
             if arrived_at_point(bonus_gps[0]):
                 visited[0] = True
@@ -65,43 +63,35 @@ def update_robot_gps(gps_reading):
                 visited[2] = True
                 print("arrived at point 3")
         # make the list of not-yet-visited points' relative positions
-        make_rel_pt_list()
+        pub_next_pt()
 
-def make_rel_pt_list():
-    # make a list of the three bonus points and the goal, all relative to the starting point.
-    # only include non-visited points.
-    # this will be used for path planning.
-    point_list = []
+def pub_next_pt():
+    # Find and publish relative location of next non-visited point.
+    rel = Gps()
     # bonus waypoint 1
     if not visited[0]:
-        print("going for point 1")
-        rel_b1 = Gps()
-        rel_b1.latitude = bonus_gps[0].latitude - robot_gps.latitude
-        rel_b1.longitude = bonus_gps[0].longitude - robot_gps.longitude
-        point_list.append(rel_b1)
+        #print("going for point 1")
+        rel.latitude = bonus_gps[0].latitude - robot_gps.latitude
+        rel.longitude = bonus_gps[0].longitude - robot_gps.longitude
+        loc_pub.publish(rel)
     # bonus waypoint 2
     elif not visited[1]:
-        print("going for point 2")
-        rel_b2 = Gps()
-        rel_b2.latitude = bonus_gps[1].latitude - robot_gps.latitude
-        rel_b2.longitude = bonus_gps[1].latitude - robot_gps.longitude
-        point_list.append(rel_b2)
+        #print("going for point 2")
+        rel.latitude = bonus_gps[1].latitude - robot_gps.latitude
+        rel.longitude = bonus_gps[1].longitude - robot_gps.longitude
+        loc_pub.publish(rel)
     # bonus waypoint 3
     elif not visited[2]:
-        print("going for point 3")
-        rel_b3 = Gps()
-        rel_b3.latitude = bonus_gps[2].latitude - robot_gps.latitude
-        rel_b3.longitude = bonus_gps[2].latitude - robot_gps.longitude
-        point_list.append(rel_b3)
+        #print("going for point 3")
+        rel.latitude = bonus_gps[2].latitude - robot_gps.latitude
+        rel.longitude = bonus_gps[2].longitude - robot_gps.longitude
+        loc_pub.publish(rel)
     # final goal waypoint 
     else:
-        print("going for final goal")
-        rel_goal = Gps()
-        rel_goal.latitude = goal_gps.latitude - robot_gps.latitude
-        rel_goal.longitude = goal_gps.latitude - robot_gps.longitude
-        point_list.append(rel_goal)
-    # send next point as the current target position
-    loc_pub.publish(point_list[0])
+        #print("going for final goal")
+        rel.latitude = goal_gps.latitude - robot_gps.latitude
+        rel.longitude = goal_gps.longitude - robot_gps.longitude
+        loc_pub.publish(rel)
 
 # similar function to beebotics' reactive_node.py/get_current_heading()
 def update_heading(imu_data):
@@ -115,7 +105,7 @@ def update_heading(imu_data):
     yaw_rads = transformations.euler_from_quaternion(quaternion)[2]
 
     current_heading = Float32()
-    current_heading.data = yaw_rads + pi
+    current_heading.data = -yaw_rads
     hdg_pub.publish(current_heading)
 
 def main():
@@ -152,7 +142,8 @@ if __name__ == '__main__':
         pass
 
 
-
+## This version of the function would require a message type that is a list of Gps messages.
+## This is also more information than the path planner needs at the moment.
 # def make_rel_pt_list():
 #     # send a list of the three bonus points and the goal, all relative to the starting point
 #     # this will be used for path planning
