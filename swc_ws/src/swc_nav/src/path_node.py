@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import rospy
-from math import atan, pi
+from math import atan, pi, degrees
 from std_msgs.msg import Float32
 from swc_msgs.msg import Control, Gps
 
@@ -14,30 +14,36 @@ desired_heading = 0
 
 def get_current_heading(heading):
     global robot_heading
-    robot_heading = heading.data - pi
+    robot_heading = heading.data
 
 def get_desired_location(rel_goal_gps):
     global desired_heading
     lat_diff = rel_goal_gps.latitude # lat ~ y (vertical position)
     lon_diff = rel_goal_gps.longitude # lon ~ x (horizontal position)
-    # calculate angle
-    desired_heading = atan(lon_diff/lat_diff) # radians
-    # if lon_diff < 0, the angle will be negative
-    if lat_diff < 0:
-        desired_heading += pi
+    # calculate angle, being careful about the sign
+    alpha = abs(atan(lon_diff/lat_diff))
+    if lat_diff >= 0 and lon_diff >= 0:
+        desired_heading = alpha
+    elif lat_diff >= 0 and lon_diff < 0:
+        desired_heading = -alpha
+    elif lat_diff < 0 and lon_diff >= 0:
+        desired_heading = pi - alpha
+    elif lat_diff < 0 and lon_diff < 0:
+        desired_heading = -(pi - alpha)
+    # not sure why, but need to reverse sign
+    desired_heading *= -1
 
 def timer_callback(event): 
-    P = 0.06
-    # TODO do a better thing, maybe pure pursuit with waypoints
+    P = 0.3
     turn_angle = Float32()
-    turn_angle.data = -(desired_heading - robot_heading) * P
+    turn_angle.data = (desired_heading - robot_heading) * P
     # normalize to (-pi, pi)
-    turn_angle.data = (turn_angle.data + pi) % (2*pi) - pi
+    #turn_angle.data = (turn_angle.data + pi) % (2*pi) - pi
     turn_pub.publish(turn_angle)
-    # for now don't worry about speed
-    # TODO DEBUG
-    #print(desired_heading)
-    #print(robot_heading)
+    # for now let the controller worry about speed
+    #print("desired heading: ", degrees(desired_heading))
+    #print("current heading: ", degrees(robot_heading))
+    
 
 def main():
     global turn_pub
