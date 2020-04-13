@@ -34,7 +34,7 @@ def get_desired_location(rel_goal_gps):
     desired_heading *= -1
 
 def timer_callback(event): 
-    P = 0.06
+    P = 0.3
     turn_angle = Float32()
     turn_angle.data = (desired_heading - robot_heading) * P
     # normalize to (-pi, pi)

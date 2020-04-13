@@ -13,7 +13,7 @@ def get_turn_angle(turn):
     control_msg = Control()
     control_msg.turn_angle = degrees(turn.data) # turn.data is in radians
     # modulate speed based on angle
-    control_msg.speed = 6 * (1 - abs(control_msg.turn_angle)/30)**2
+    control_msg.speed = 5 * (1 - abs(control_msg.turn_angle)/30)**2 + 2
     control_pub.publish(control_msg)
 
 def main():
