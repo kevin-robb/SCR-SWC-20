@@ -12,6 +12,7 @@ control_pub = None
 angle_to_target = 0
 # bumper status (true if currently bumped)
 bumped = False
+turn_dir = 0 # -1 = left, 1 = right, 0 = undecided
 last_time = time.time()
 # laserscan status
 left_in_range = False
@@ -21,6 +22,7 @@ def get_bump_status(bump_status):
     global bumped, last_time
     bumped = bump_status
     last_time = time.time()
+    turn_dir = 0
 
 # referenced beebotics' reactive_node.py/get_laser_val()
 def get_laserscan(laserscan):
@@ -53,25 +55,31 @@ def get_turn_angle(turn):
     angle_to_target = degrees(turn.data) # turn.data is in radians
 
 def timer_callback(event):
-    global bumped
+    global bumped, turn_dir
     control_msg = Control()
     # modulate speed based on angle
     control_msg.speed = 5 * (1 - abs(angle_to_target)/30)**2 + 2
     # set up priority of actions
     if bumped:
         print("bumped")
-        if time.time() - last_time < 0.7:
-            # back up and turn, trying to turn in the best direction
-            control_msg.speed = -4
+        # decide which way to turn
+        if turn_dir == 0:
             if angle_to_target > 0:
-                control_msg.turn_angle = -30
+                turn_dir = -1
             else:
-                control_msg.turn_angle = 30
-        elif time.time() - last_time < 1.3:
-            control_msg.speed = 5
+                turn_dir = 1
+        # turn for a set amount of time
+        if time.time() - last_time < 0.3:
+            # back up and turn in the best direction
+            control_msg.speed = -3
+            control_msg.turn_angle = turn_dir * 30
+        # go straight for a set amount of time to offset from the blocked path
+        elif time.time() - last_time < 0.7:
+            control_msg.speed = 4
             control_msg.turn_angle = 0
         else:
             bumped = False
+            turn_dir = 0
     # elif right_in_range:
     #     print("right_in_range")
     #     control_msg.turn_angle = -15
