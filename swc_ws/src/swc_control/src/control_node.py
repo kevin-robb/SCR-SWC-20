@@ -14,41 +14,55 @@ angle_to_target = 0
 bumped = False
 turn_dir = 0 # -1 = left, 1 = right, 0 = undecided
 last_time = time.time()
-# laserscan status
-left_in_range = False
-right_in_range = False
+# # laserscan status
+# left_in_range = False
+# right_in_range = False
+# laserscan checks
+obs_ahead = False
+obs_left = False
+obs_right = False
 
 def get_bump_status(bump_status):
-    global bumped, last_time
+    global bumped, last_time, turn_dir
     bumped = bump_status
     last_time = time.time()
     turn_dir = 0
 
-# referenced beebotics' reactive_node.py/get_laser_val()
 def get_laserscan(laserscan):
-    global left_in_range, right_in_range
-    # figure out which way we need to turn to avoid obstacles
-    mid_index = int(len(laserscan.ranges)/2)
-    # laserscan gives 0 if it sees nothing and probably 0 if it's too close, so
-    # find min non-zero reading
-    min_right_dist = 100000
-    for scan_val in laserscan.ranges[0:mid_index]:
-        if scan_val > 0 and scan_val < min_right_dist:
-            min_right_dist = scan_val
-    min_left_dist = 100000
-    for scan_val in laserscan.ranges[mid_index:len(laserscan.ranges)-1]:
-        if scan_val > 0 and scan_val < min_left_dist:
-            min_left_dist = scan_val
+    # max LIDAR range is 0.12 to 10.0 meters. gives 0 if too close or sees nothing.
+    # 360 total samples, first one is straight ahead and continuing CCW.
+    global obs_ahead, obs_left, obs_right
+    # set clearances for whether obstacles will be considered obstructions. meters
+    front_clearance = 2.0
+    side_clearance = 0.3
+    # get min and max measured values
+    meas_min = laserscan.range_min
+    #meas_max = laserscan.range_max
+    max_deg = 20 # degrees of each section
+    # first check if there is an obstacle straight ahead
+    #obs_ahead = laserscan.ranges[0] >= meas_min and laserscan.ranges[0] < front_clearance
+    for i in range(-max_deg/2, max_deg/2):
+        if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < front_clearance:
+            obs_ahead = True
+            break
+        else:
+            obs_ahead = False
+    # next check if there is an obstacle on either side
+    # check left (positive degrees starting from straight ahead)
+    for i in range(max_deg/2, 3*max_deg/2):
+        if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < side_clearance:
+            obs_left = True
+            break
+        else:
+            obs_left = False
+    # check right (negative degrees starting from straight ahead)
+    for i in range(max_deg/2, 3*max_deg/2):
+        if laserscan.ranges[360 - i] >= meas_min and laserscan.ranges[360 - i] < side_clearance:
+            obs_right = True
+            break
+        else:
+            obs_right = False
 
-    # check if these minimum distances are in our min range
-    if min_right_dist < 0.75:
-        right_in_range = True
-    else:
-        right_in_range = False
-    if min_left_dist < 0.75:
-        left_in_range = True
-    else:
-        right_in_range = False
 
 def get_turn_angle(turn):
     global angle_to_target
@@ -57,8 +71,10 @@ def get_turn_angle(turn):
 def timer_callback(event):
     global bumped, turn_dir
     control_msg = Control()
+
     # modulate speed based on angle
     control_msg.speed = 5 * (1 - abs(angle_to_target)/30)**2 + 2
+
     # set up priority of actions
     if bumped:
         print("bumped")
@@ -72,20 +88,47 @@ def timer_callback(event):
         if time.time() - last_time < 0.3:
             # back up and turn in the best direction
             control_msg.speed = -3
-            control_msg.turn_angle = turn_dir * 30
+            control_msg.turn_angle = turn_dir * 25
         # go straight for a set amount of time to offset from the blocked path
-        elif time.time() - last_time < 0.7:
-            control_msg.speed = 4
+        elif time.time() - last_time < 0.6:
+            control_msg.speed = 3
             control_msg.turn_angle = 0
         else:
             bumped = False
             turn_dir = 0
-    # elif right_in_range:
-    #     print("right_in_range")
-    #     control_msg.turn_angle = -15
-    # elif left_in_range:
-    #     print("left_in_range")
-    #     control_msg.turn_angle = 15
+    elif obs_ahead:
+        # obstacle straight ahead. check sides before dodging
+        # slow down and turn to prevent hitting the obstacle
+        control_msg.speed = 0.5
+        if obs_left and not obs_right:
+            # turn right
+            print("dodge right")
+            control_msg.turn_angle = -15
+        elif obs_right and not obs_left:
+            # turn left
+            print("dodge left")
+            control_msg.turn_angle = 15
+        elif not obs_left and not obs_right:
+            print("dodge")
+            # just turn right by default
+            control_msg.turn_angle = 30
+        else:
+            # obstacle ahead and both sides, so TODO back up until one side is clear
+            print("trapped")
+            control_msg.speed = -1
+            control_msg.turn_angle = -20
+    elif obs_left and obs_right:
+        # we are between two obstacles somehow. keep going straight
+        print("between obstacles")
+        control_msg.turn_angle = angle_to_target
+    elif obs_left:
+        # obstacle on left but not ahead. little dodge
+        print("little dodge left")
+        control_msg.turn_angle = 15
+    elif obs_right:
+        # obstacle on right but not ahead. little dodge
+        print("little dodge right")
+        control_msg.turn_angle = -15
     else:
         print("no obstructions")
         # no obstacles in the way
