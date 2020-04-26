@@ -18,9 +18,11 @@ last_time = time.time()
 # left_in_range = False
 # right_in_range = False
 # laserscan checks
-obs_ahead = False
-obs_left = False
-obs_right = False
+# obs_ahead = False
+# obs_left = False
+# obs_right = False
+# keeps track of closest obstacle in each region
+obs = [0,0,0,0,0,0,0,0] #obs[0] is front-left region, CCW in 45 degree regions
 
 def get_bump_status(bump_status):
     global bumped, last_time, turn_dir
@@ -31,37 +33,59 @@ def get_bump_status(bump_status):
 def get_laserscan(laserscan):
     # max LIDAR range is 0.12 to 10.0 meters. gives 0 if too close or sees nothing.
     # 360 total samples, first one is straight ahead and continuing CCW.
-    global obs_ahead, obs_left, obs_right
-    # set clearances for whether obstacles will be considered obstructions. meters
-    front_clearance = 2.0
-    side_clearance = 0.3
+    global obs
     # get min and max measured values
     meas_min = laserscan.range_min
     #meas_max = laserscan.range_max
-    max_deg = 20 # degrees of each section
-    # first check if there is an obstacle straight ahead
-    #obs_ahead = laserscan.ranges[0] >= meas_min and laserscan.ranges[0] < front_clearance
-    for i in range(-max_deg/2, max_deg/2):
-        if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < front_clearance:
-            obs_ahead = True
-            break
-        else:
-            obs_ahead = False
-    # next check if there is an obstacle on either side
-    # check left (positive degrees starting from straight ahead)
-    for i in range(max_deg/2, 3*max_deg/2):
-        if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < side_clearance:
-            obs_left = True
-            break
-        else:
-            obs_left = False
-    # check right (negative degrees starting from straight ahead)
-    for i in range(max_deg/2, 3*max_deg/2):
-        if laserscan.ranges[360 - i] >= meas_min and laserscan.ranges[360 - i] < side_clearance:
-            obs_right = True
-            break
-        else:
-            obs_right = False
+    # TODO create 8 directional thing for whether obstacles are present in each region
+    for reg in range(0, 8):
+        min_in_range = 100
+        for i in range(0, 45*(reg+1)):
+            if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < min_in_range:
+                min_in_range = laserscan.ranges[i]
+        obs[reg] = min_in_range if min_in_range < 100 else 0
+
+
+    #TODO need to change logic in timer_callback to use obs instead of the old boolean stuff
+
+
+
+
+
+
+    ##*********************************************************************************************old
+    # global obs_ahead, obs_left, obs_right
+    # # set clearances for whether obstacles will be considered obstructions. meters
+    # front_clearance = 1.0
+    # side_clearance = 0.15
+    # # get min and max measured values
+    # meas_min = laserscan.range_min
+    # #meas_max = laserscan.range_max
+    # max_deg = 20 # degrees of each section
+    # # first check if there is an obstacle straight ahead
+    # #obs_ahead = laserscan.ranges[0] >= meas_min and laserscan.ranges[0] < front_clearance
+    # for i in range(-max_deg/2, max_deg/2):
+    #     if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < front_clearance:
+    #         obs_ahead = True
+    #         break
+    #     else:
+    #         obs_ahead = False
+    # # next check if there is an obstacle on either side
+    # # check left (positive degrees starting from straight ahead)
+    # for i in range(max_deg/2, 3*max_deg/2):
+    #     if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < side_clearance:
+    #         obs_left = True
+    #         break
+    #     else:
+    #         obs_left = False
+    # # check right (negative degrees starting from straight ahead)
+    # for i in range(max_deg/2, 3*max_deg/2):
+    #     if laserscan.ranges[360 - i] >= meas_min and laserscan.ranges[360 - i] < side_clearance:
+    #         obs_right = True
+    #         break
+    #     else:
+    #         obs_right = False
+    ##**********************************************************************************************\old
 
 
 def get_turn_angle(turn):
