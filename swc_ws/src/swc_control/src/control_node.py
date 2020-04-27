@@ -8,19 +8,17 @@ from swc_msgs.msg import Control
 from sensor_msgs.msg import LaserScan
 
 control_pub = None
+initialized = False
+# ignore obstacles farther away than clearance
+clearance = 1.0
 # desired turn angle to target
 angle_to_target = 0
+# desired angle to bypass an obstacle while staying as on-target as possible
+angle_bypass = 0
 # bumper status (true if currently bumped)
 bumped = False
 turn_dir = 0 # -1 = left, 1 = right, 0 = undecided
 last_time = time.time()
-# # laserscan status
-# left_in_range = False
-# right_in_range = False
-# laserscan checks
-# obs_ahead = False
-# obs_left = False
-# obs_right = False
 # keeps track of closest obstacle in each region
 obs = [0,0,0,0,0,0,0,0] #obs[0] is front-left region, CCW in 45 degree regions
 
@@ -30,6 +28,54 @@ def get_bump_status(bump_status):
     last_time = time.time()
     turn_dir = 0
 
+# def reg_to_hdg(reg):
+#     # convert region index to degrees
+#     return (((reg + 16) % 8) - 4) * -45
+
+def choose_dir(laserscan):
+    # Now decide where to go
+    global angle_bypass
+    # target_reg = int((angle_to_target + 180.0) / -45.0) #index of region matching obs
+    # # if the target region is totally unoccupied, go there
+    # if obs[target_reg] == 0:
+    #     angle_bypass = reg_to_hdg(target_reg)
+    #     return
+    
+    for i in range(0, 180, 5):
+        if laserscan.ranges[angle_to_target - i] == 0 or laserscan.ranges[angle_to_target - i] > clearance:
+            angle_bypass = angle_to_target - i
+            return
+        elif laserscan.ranges[angle_to_target + i] == 0 or laserscan.ranges[angle_to_target + i] > clearance:
+            angle_bypass = angle_to_target + i
+            return
+    # if the code gets here, the bot is surrounded. just pursue the target heading and hope for the best
+    angle_bypass = angle_to_target
+
+    # # choose which region to go to depending on obstructions and target heading
+    # #global angle_to_target, obs
+    # # angle_to_target is in the range -180 to 180 degrees (CW, 0 is front)
+    # target_reg = int((angle_to_target + 180.0) / -45.0) #index of region matching obs
+    # # now find the closest unoccupied region to the target region
+    # if obs[target_reg] == 0:
+    #     return reg_to_hdg(target_reg)
+    # # max_reg = target_reg
+    # # max_val = obs[target_reg]
+    # # for i in range(0,4):
+    # #     # check for empty region
+    # #     if obs[target_reg - i] == 0:
+    # #         return reg_to_hdg(target_reg - i)
+    # #     elif obs[target_reg + i] == 0:
+    # #         return reg_to_hdg(target_reg + i)
+    # #     # find best non-empty region (largest distance away)
+    # #     if obs[target_reg - i] > max_val:
+    # #         max_reg = target_reg - i
+    # #         max_val = obs[target_reg - i]
+    # #     if obs[target_reg + i] > max_val:
+    # #         max_reg = target_reg + i
+    # #         max_val = obs[target_reg + i]
+    # # return reg_to_hdg(max_reg)
+
+
 def get_laserscan(laserscan):
     # max LIDAR range is 0.12 to 10.0 meters. gives 0 if too close or sees nothing.
     # 360 total samples, first one is straight ahead and continuing CCW.
@@ -37,20 +83,32 @@ def get_laserscan(laserscan):
     # get min and max measured values
     meas_min = laserscan.range_min
     #meas_max = laserscan.range_max
-    # TODO create 8 directional thing for whether obstacles are present in each region
+    # create 8 directional thing for whether obstacles are present in each region
     for reg in range(0, 8):
         min_in_range = 100
         for i in range(0, 45*(reg+1)):
-            if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < min_in_range:
+            if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < min_in_range and laserscan.ranges[i] < clearance:
                 min_in_range = laserscan.ranges[i]
         obs[reg] = min_in_range if min_in_range < 100 else 0
+    # now choose a direction to go
+    choose_dir(laserscan)
 
-
-    #TODO need to change logic in timer_callback to use obs instead of the old boolean stuff
-
-
-
-
+    # max_reg = target_reg
+    # max_val = obs[target_reg]
+    # for i in range(0,4):
+    #     # check for empty region
+    #     if obs[target_reg - i] == 0:
+    #         return reg_to_hdg(target_reg - i)
+    #     elif obs[target_reg + i] == 0:
+    #         return reg_to_hdg(target_reg + i)
+    #     # find best non-empty region (largest distance away)
+    #     if obs[target_reg - i] > max_val:
+    #         max_reg = target_reg - i
+    #         max_val = obs[target_reg - i]
+    #     if obs[target_reg + i] > max_val:
+    #         max_reg = target_reg + i
+    #         max_val = obs[target_reg + i]
+    # return reg_to_hdg(max_reg)
 
 
     ##*********************************************************************************************old
@@ -89,10 +147,13 @@ def get_laserscan(laserscan):
 
 
 def get_turn_angle(turn):
-    global angle_to_target
-    angle_to_target = degrees(turn.data) # turn.data is in radians
+    global angle_to_target, initialized
+    angle_to_target = int(degrees(turn.data)) # turn.data is in radians
+    initialized = True
 
 def timer_callback(event):
+    if not initialized:
+        return
     global bumped, turn_dir
     control_msg = Control()
 
@@ -120,43 +181,52 @@ def timer_callback(event):
         else:
             bumped = False
             turn_dir = 0
-    elif obs_ahead:
-        # obstacle straight ahead. check sides before dodging
-        # slow down and turn to prevent hitting the obstacle
-        control_msg.speed = 0.5
-        if obs_left and not obs_right:
-            # turn right
-            print("dodge right")
-            control_msg.turn_angle = -15
-        elif obs_right and not obs_left:
-            # turn left
-            print("dodge left")
-            control_msg.turn_angle = 15
-        elif not obs_left and not obs_right:
-            print("dodge")
-            # just turn right by default
-            control_msg.turn_angle = 30
-        else:
-            # obstacle ahead and both sides, so TODO back up until one side is clear
-            print("trapped")
-            control_msg.speed = -1
-            control_msg.turn_angle = -20
-    elif obs_left and obs_right:
-        # we are between two obstacles somehow. keep going straight
-        print("between obstacles")
-        control_msg.turn_angle = angle_to_target
-    elif obs_left:
-        # obstacle on left but not ahead. little dodge
-        print("little dodge left")
-        control_msg.turn_angle = 15
-    elif obs_right:
-        # obstacle on right but not ahead. little dodge
-        print("little dodge right")
-        control_msg.turn_angle = -15
+    # elif obs_ahead:
+    #     # obstacle straight ahead. check sides before dodging
+    #     # slow down and turn to prevent hitting the obstacle
+    #     control_msg.speed = 0.5
+    #     if obs_left and not obs_right:
+    #         # turn right
+    #         print("dodge right")
+    #         control_msg.turn_angle = -15
+    #     elif obs_right and not obs_left:
+    #         # turn left
+    #         print("dodge left")
+    #         control_msg.turn_angle = 15
+    #     elif not obs_left and not obs_right:
+    #         print("dodge")
+    #         # just turn right by default
+    #         control_msg.turn_angle = 30
+    #     else:
+    #         # obstacle ahead and both sides, so TODO back up until one side is clear
+    #         print("trapped")
+    #         control_msg.speed = -1
+    #         control_msg.turn_angle = -20
+    # elif obs_left and obs_right:
+    #     # we are between two obstacles somehow. keep going straight
+    #     print("between obstacles")
+    #     control_msg.turn_angle = angle_to_target
+    # elif obs_left:
+    #     # obstacle on left but not ahead. little dodge
+    #     print("little dodge left")
+    #     control_msg.turn_angle = 15
+    # elif obs_right:
+    #     # obstacle on right but not ahead. little dodge
+    #     print("little dodge right")
+    #     control_msg.turn_angle = -15
     else:
-        print("no obstructions")
+        #print("no obstructions")
         # no obstacles in the way
-        control_msg.turn_angle = angle_to_target
+        #control_msg.turn_angle = angle_to_target
+        control_msg.speed = 4 * (1 - abs(angle_bypass)/30)**5 + 0.3
+        control_msg.turn_angle = angle_bypass
+        if control_msg.turn_angle < -90:
+            control_msg.turn_angle += 180
+            control_msg.speed *= -1
+        elif control_msg.turn_angle > 90:
+            control_msg.turn_angle -= 180
+            control_msg.speed *= -1
+        print("chose region", control_msg.turn_angle)
     control_pub.publish(control_msg)
 
 def main():
