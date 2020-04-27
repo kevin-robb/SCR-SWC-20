@@ -45,10 +45,10 @@ def get_laserscan(laserscan):
     # 360 total samples, first one is straight ahead and continuing CCW.
     global obstructed
     # get min and max measured values
-    #meas_min = laserscan.range_min
+    meas_min = laserscan.range_min
     #meas_max = laserscan.range_max
     for i in range(0, 360):
-        if laserscan.ranges[-i] != 0 and laserscan.ranges[i] < clearance:
+        if laserscan.ranges[-i] >= meas_min and laserscan.ranges[i] < clearance:
             obstructed[i] = True
         else:
             obstructed[i] = False
@@ -71,7 +71,7 @@ def get_turn_angle(turn):
 def timer_callback(event):
     if not initialized:
         return
-    global bumped, turn_dir
+    global bumped, turn_dir, last_time
     control_msg = Control()
 
     # modulate speed based on angle
@@ -102,7 +102,17 @@ def timer_callback(event):
         # STOP and avoid
         control_msg.speed = 0
         print("that was close")
-        bumped = True
+        last_time = time.time()
+        backup_time = 0.3
+        turn_time = 0.3
+        while time.time() - last_time < backup_time:
+            control_msg.speed = -2
+            control_msg.turn_angle = 0
+            control_pub.publish(control_msg)
+        while time.time() - last_time - backup_time < turn_time:
+            control_msg.speed = 1.5
+            control_msg.turn_angle = angle_bypass + 30
+            control_pub.publish(control_msg)
     else:
         #print("no obstructions")
         # no obstacles in the way
