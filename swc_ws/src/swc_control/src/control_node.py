@@ -10,7 +10,7 @@ from sensor_msgs.msg import LaserScan
 control_pub = None
 initialized = False
 # ignore obstacles farther away than clearance
-clearance = 1.5
+clearance = 1.0
 obstructed = [False]*360
 # desired turn angle to target
 angle_to_target = 0
@@ -18,6 +18,7 @@ angle_to_target = 0
 angle_bypass = 0
 # bumper status (true if currently bumped)
 bumped = False
+almost_bumped = False
 turn_dir = 0 # -1 = left, 1 = right, 0 = undecided
 last_time = time.time()
 # check regions for obstruction
@@ -50,35 +51,53 @@ def get_bump_status(bump_status):
 def get_laserscan(laserscan):
     # max LIDAR range is 0.12 to 10.0 meters. gives 0 if too close or sees nothing.
     # 360 total samples, first one is straight ahead and continuing CCW.
-    global obs_fl, obs_fr, obs_l, obs_r, obs_rear, stop
-    obs_fl = False
-    obs_fr = False
-    obs_l = False
-    obs_r = False
-    obs_rear = False
+    # global obs_fl, obs_fr, obs_l, obs_r, obs_rear, stop
+    # obs_fl = False
+    # obs_fr = False
+    # obs_l = False
+    # obs_r = False
+    # obs_rear = False
+    # stop = False
+    global almost_bumped, turn_dir
     # get min and max measured values
     meas_min = laserscan.range_min
     #meas_max = laserscan.range_max
+    # basically do what we did for bumped, but without actually colliding
+    for i in range(-20, 20):
+        if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < clearance:
+            almost_bumped = True
+    # figure out which direction is more obstructed, and turn the other way
+    if almost_bumped:
+        min_l = 100
+        min_r = 100
+        for i in range(0, 30):
+            if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < min_l:
+                min_l = laserscan.ranges[i]
+            if laserscan.ranges[-i] >= meas_min and laserscan.ranges[-i] < min_r:
+                min_r = laserscan.ranges[-i]
+        # turn away from the closer obstacle (-1 = left, +1 = right)
+        turn_dir = -1 if min_l > min_r else 1
+
     # first check if we are too close to an obstacle, and STOP
-    for i in range(0, 360):
-        if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < 0.7:
-            stop = True
-    # check regions of interest for obstacles
-    for i in range(0, 20):
-        if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < clearance:
-            obs_fl = True
-    for i in range(360, 360-20):
-        if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < clearance:
-            obs_fr = True
-    for i in range(20, 60):
-        if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < clearance:
-            obs_l = True
-    for i in range(360-20, 360-60):
-        if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < clearance:
-            obs_r = True
-    for i in range(150, 210):
-        if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < clearance:
-            obs_rear = True
+    # for i in range(0, 360):
+    #     if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < 0.7:
+    #         stop = True
+    # # check regions of interest for obstacles
+    # for i in range(0, 20):
+    #     if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < clearance:
+    #         obs_fl = True
+    # for i in range(360, 360-20):
+    #     if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < clearance:
+    #         obs_fr = True
+    # for i in range(20, 60):
+    #     if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < clearance:
+    #         obs_l = True
+    # for i in range(360-20, 360-60):
+    #     if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < clearance:
+    #         obs_r = True
+    # for i in range(150, 210):
+    #     if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < clearance:
+    #         obs_rear = True
     # now choose a direction to go
     #choose_dir(laserscan)
 
@@ -98,18 +117,17 @@ def get_turn_angle(turn):
 def timer_callback(event):
     if not initialized:
         return
-    global bumped, turn_dir, last_time
+    global bumped, turn_dir, last_time, almost_bumped
     control_msg = Control()
 
-    if stop:
-        print("STOP")
-        control_msg.speed = 0
-        control_msg.turn_angle = 0
-        control_pub.publish(control_msg)
-        return
-
-    # modulate speed based on angle
-    control_msg.speed = 4 * (1 - abs(angle_to_target)/30)**2 + 1
+    # if stop:
+    #     print("STOP")
+    #     control_msg.speed = 0
+    #     control_msg.turn_angle = 0
+    #     last_time = time.time()
+    #     while time.time() - last_time < 1.0:
+    #         control_pub.publish(control_msg)
+    #     #return
 
     # set up priority of actions
     if bumped:
@@ -125,43 +143,64 @@ def timer_callback(event):
             # back up and turn in the best direction
             control_msg.speed = -3
             control_msg.turn_angle = turn_dir * 25
+            control_pub.publish(control_msg)
         # go straight for a set amount of time to offset from the blocked path
-        while time.time() - last_time < 0.6:
+        while time.time() - last_time < 0.5:
             control_msg.speed = 3
             control_msg.turn_angle = 0
+            control_pub.publish(control_msg)
         bumped = False
         turn_dir = 0
-    elif obs_fl and obs_fr:
-        # STOP and avoid
-        control_msg.speed = 0
-        print("front obstacle")
+    elif almost_bumped:
+        print("that was close")
+        # backup a bit
+        backup_time = 0.4
         last_time = time.time()
-        backup_time = 0.3
-        turn_time = 0.3
-        while time.time() - last_time < backup_time and not obs_rear:
+        while time.time() - last_time < backup_time:
             control_msg.speed = -2
             control_msg.turn_angle = 0
             control_pub.publish(control_msg)
-        while time.time() - last_time - backup_time < turn_time and not (obs_l and obs_r):
-            control_msg.speed = 1.5
-            if not obs_r:
-                control_msg.turn_angle = angle_to_target + 30
-            elif not obs_l:
-                control_msg.turn_angle = angle_to_target - 30
+        # turn according to turn_dir
+        turn_time = 0.7
+        last_time = time.time()
+        while time.time() - last_time < turn_time:
+            control_msg.speed = 2
+            control_msg.turn_angle = turn_dir * 25
             control_pub.publish(control_msg)
+        # reset vars
+        almost_bumped = False
+        turn_dir = 0
+    # elif obs_fl and obs_fr:
+    #     # STOP and avoid
+    #     control_msg.speed = 0
+    #     print("front obstacle")
+    #     last_time = time.time()
+    #     backup_time = 0.3
+    #     turn_time = 0.3
+    #     while time.time() - last_time < backup_time and not obs_rear:
+    #         control_msg.speed = -2
+    #         control_msg.turn_angle = 0
+    #         control_pub.publish(control_msg)
+    #     while time.time() - last_time - backup_time < turn_time and not (obs_l and obs_r):
+    #         control_msg.speed = 1.5
+    #         if not obs_r:
+    #             control_msg.turn_angle = angle_to_target + 30
+    #         elif not obs_l:
+    #             control_msg.turn_angle = angle_to_target - 30
+    #         control_pub.publish(control_msg)
     else:
-        #print("no obstructions")
-        # no obstacles in the way
-        #control_msg.turn_angle = angle_to_target
-        control_msg.speed = 4 * (1 - abs(angle_to_target)/30)**5 + 0.3
+        print("no obstructions")
+        # no obstacles in the way. pursue angle to next waypoint
+        # modulate speed based on angle
+        control_msg.speed = 4 * (1 - abs(angle_to_target)/30)**2 + 0.5
         control_msg.turn_angle = angle_to_target
+        # correct for really big turns (unlikely)
         if control_msg.turn_angle < -90:
             control_msg.turn_angle += 180
             control_msg.speed *= -1
         elif control_msg.turn_angle > 90:
             control_msg.turn_angle -= 180
             control_msg.speed *= -1
-        print("no obstructions ahead", control_msg.turn_angle)
     control_pub.publish(control_msg)
 
 def main():
