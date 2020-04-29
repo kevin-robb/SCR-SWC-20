@@ -5,7 +5,7 @@ from math import pi, sqrt
 from tf import transformations
 from std_msgs.msg import Float32
 from sensor_msgs.msg import Imu
-from swc_msgs.msg import Control, Gps
+from swc_msgs.msg import Gps
 from swc_msgs.srv import Waypoints
 
 loc_pub = None
@@ -20,7 +20,10 @@ goal_gps = Gps()
 wp_interpreted = False
 # keep track of which waypoints have been visited
 visited = [False, False, False]
-error_margin = 0.000001
+lat_to_m = 110949.14
+lon_to_m = 90765.78
+error_margin_lat = 1/lat_to_m
+error_margin_lon = 1/lon_to_m
 
 def interpret_waypoints(waypoints):
     global start_gps, bonus_gps, goal_gps, visited, wp_interpreted
@@ -38,8 +41,7 @@ def interpret_waypoints(waypoints):
     print("waypoints interpreted")
 
 def arrived_at_point(point_gps):
-    #dist = sqrt((point_gps.latitude - robot_gps.latitude)**2 + (point_gps.longitude - robot_gps.longitude)**2)
-    if point_gps.latitude - robot_gps.latitude < error_margin and point_gps.longitude - robot_gps.longitude < error_margin:
+    if point_gps.latitude - robot_gps.latitude < error_margin_lat and point_gps.longitude - robot_gps.longitude < error_margin_lon:
         return True
     else:
         return False
@@ -100,8 +102,8 @@ def pub_next_pt():
 def pub_dist_to_next_pt(point_gps):
     dist = Float32()
     # convert dist from GPS to meters
-    lat_diff = (point_gps.latitude - robot_gps.latitude) * 110949.14
-    lon_diff = (point_gps.longitude - robot_gps.longitude) * 90765.78
+    lat_diff = (point_gps.latitude - robot_gps.latitude) * lat_to_m
+    lon_diff = (point_gps.longitude - robot_gps.longitude) * lon_to_m
     dist.data = sqrt(lat_diff**2 + lon_diff**2)
     #print("dist to target:", dist.data)
     dist_pub.publish(dist)

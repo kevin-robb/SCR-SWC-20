@@ -3,7 +3,7 @@
 import rospy
 from math import atan, pi, degrees
 from std_msgs.msg import Float32
-from swc_msgs.msg import Control, Gps
+from swc_msgs.msg import Gps
 
 turn_pub = None
 # the robot's current global heading
