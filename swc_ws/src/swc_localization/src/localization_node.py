@@ -5,12 +5,12 @@ from math import pi, sqrt
 from tf import transformations
 from std_msgs.msg import Float32
 from sensor_msgs.msg import Imu
-from swc_msgs.msg import Control, Gps
+from swc_msgs.msg import Gps
 from swc_msgs.srv import Waypoints
 
 loc_pub = None
 hdg_pub = None
-pts_pub = None
+dist_pub = None
 # robot's current GPS location
 robot_gps = Gps()
 # waypoints
@@ -20,7 +20,10 @@ goal_gps = Gps()
 wp_interpreted = False
 # keep track of which waypoints have been visited
 visited = [False, False, False]
-error_margin = 0.000001
+lat_to_m = 110949.14
+lon_to_m = 90765.78
+error_margin_lat = 1/lat_to_m
+error_margin_lon = 1/lon_to_m
 
 def interpret_waypoints(waypoints):
     global start_gps, bonus_gps, goal_gps, visited, wp_interpreted
@@ -38,8 +41,7 @@ def interpret_waypoints(waypoints):
     print("waypoints interpreted")
 
 def arrived_at_point(point_gps):
-    #dist = sqrt((point_gps.latitude - robot_gps.latitude)**2 + (point_gps.longitude - robot_gps.longitude)**2)
-    if point_gps.latitude - robot_gps.latitude < error_margin and point_gps.longitude - robot_gps.longitude < error_margin:
+    if point_gps.latitude - robot_gps.latitude < error_margin_lat and point_gps.longitude - robot_gps.longitude < error_margin_lon:
         return True
     else:
         return False
@@ -74,24 +76,38 @@ def pub_next_pt():
         rel.latitude = bonus_gps[0].latitude - robot_gps.latitude
         rel.longitude = bonus_gps[0].longitude - robot_gps.longitude
         loc_pub.publish(rel)
+        pub_dist_to_next_pt(bonus_gps[0])
     # bonus waypoint 2
     elif not visited[1]:
         #print("going for point 2")
         rel.latitude = bonus_gps[1].latitude - robot_gps.latitude
         rel.longitude = bonus_gps[1].longitude - robot_gps.longitude
         loc_pub.publish(rel)
+        pub_dist_to_next_pt(bonus_gps[1])
     # bonus waypoint 3
     elif not visited[2]:
         #print("going for point 3")
         rel.latitude = bonus_gps[2].latitude - robot_gps.latitude
         rel.longitude = bonus_gps[2].longitude - robot_gps.longitude
         loc_pub.publish(rel)
+        pub_dist_to_next_pt(bonus_gps[2])
     # final goal waypoint 
     else:
         #print("going for final goal")
         rel.latitude = goal_gps.latitude - robot_gps.latitude
         rel.longitude = goal_gps.longitude - robot_gps.longitude
         loc_pub.publish(rel)
+        pub_dist_to_next_pt(goal_gps)
+
+def pub_dist_to_next_pt(point_gps):
+    dist = Float32()
+    # convert dist from GPS to meters
+    lat_diff = (point_gps.latitude - robot_gps.latitude) * lat_to_m
+    lon_diff = (point_gps.longitude - robot_gps.longitude) * lon_to_m
+    dist.data = sqrt(lat_diff**2 + lon_diff**2)
+    #print("dist to target:", dist.data)
+    dist_pub.publish(dist)
+    # used in control_node to allow sharp turns when near the goal to prevent missing it
 
 # similar function to beebotics' reactive_node.py/get_current_heading()
 def update_heading(imu_data):
@@ -109,7 +125,7 @@ def update_heading(imu_data):
     hdg_pub.publish(current_heading)
 
 def main():
-    global loc_pub, hdg_pub, pts_pub
+    global loc_pub, hdg_pub, dist_pub
 
     # Initalize our node in ROS
     rospy.init_node('localization_node')
@@ -118,8 +134,8 @@ def main():
     loc_pub = rospy.Publisher("/swc/goal", Gps, queue_size=1)
     # publish robot's current heading
     hdg_pub = rospy.Publisher("/swc/current_heading", Float32, queue_size=1)
-    # publish list of relative GPS positions of not-yet-visited points, including final goal
-    #pts_pub = rospy.Publisher("/swc/rel_waypoints", Waypoints, queue_size=1)
+    # publish distance to current target waypoint
+    dist_pub = rospy.Publisher("/swc/dist", Float32, queue_size=1)
 
     # subscribe to robot's current GPS position and IMU data
     gps_sub = rospy.Subscriber("/sim/gps", Gps, update_robot_gps, queue_size=1)
@@ -134,46 +150,8 @@ def main():
     # pump callbacks
     rospy.spin()
 
-
 if __name__ == '__main__':
     try:
         main()
     except rospy.ROSInterruptException:
         pass
-
-
-## This version of the function would require a message type that is a list of Gps messages.
-## This is also more information than the path planner needs at the moment.
-# def make_rel_pt_list():
-#     # send a list of the three bonus points and the goal, all relative to the starting point
-#     # this will be used for path planning
-#     point_list = Waypoints()
-#     point_list.waypoints = []
-#     # bonus waypoint 1
-#     if not visited[0]:
-#         rel_b1 = Gps()
-#         rel_b1.latitude = bonus_gps[0].latitude - robot_gps.latitude
-#         rel_b1.longitude = bonus_gps[0].longitude - robot_gps.longitude
-#         point_list.waypoints.append(rel_b1)
-#     # bonus waypoint 2
-#     if not visited[1]:
-#         rel_b2 = Gps()
-#         rel_b2.latitude = bonus_gps[1].latitude - robot_gps.latitude
-#         rel_b2.longitude = bonus_gps[1].latitude - robot_gps.longitude
-#         point_list.waypoints.append(rel_b2)
-#     # bonus waypoint 3
-#     if not visited[2]:
-#         rel_b3 = Gps()
-#         rel_b3.latitude = bonus_gps[2].latitude - robot_gps.latitude
-#         rel_b3.longitude = bonus_gps[2].latitude - robot_gps.longitude
-#         point_list.waypoints.append(rel_b3)
-#     # final goal waypoint 
-#     # (if it has been visited, the sim will stop running; don't need to check)
-#     rel_goal = Gps()
-#     rel_goal.latitude = goal_gps.latitude - robot_gps.latitude
-#     rel_goal.longitude = goal_gps.latitude - robot_gps.longitude
-#     point_list.waypoints.append(rel_goal)
-#     # send list
-#     pts_pub.publish(point_list)
-#     # send next point as the current target position
-#     loc_pub.publish(point_list.waypoints[0])
