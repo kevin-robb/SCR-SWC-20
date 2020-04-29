@@ -10,10 +10,11 @@ from sensor_msgs.msg import LaserScan
 control_pub = None
 initialized = False
 # ignore obstacles farther away than clearance
-clearance = 1.0
+clearance = 1.5
 obstructed = [False]*360
 # desired turn angle to target
 angle_to_target = 0
+dist_to_target = 100
 # desired angle to bypass an obstacle while staying as on-target as possible
 angle_bypass = 0
 # bumper status (true if currently bumped)
@@ -22,17 +23,18 @@ almost_bumped = False
 turn_dir = 0 # -1 = left, 1 = right, 0 = undecided
 last_time = time.time()
 # check regions for obstruction
-obs_fl = False
-obs_fr = False
-obs_l = False
-obs_r = False
-obs_rear = False
-stop = False
+# obs_fl = False
+# obs_fr = False
+# obs_l = False
+# obs_r = False
+# obs_rear = False
+# stop = False
 
 def get_bump_status(bump_status):
     global bumped, last_time, turn_dir
     bumped = bump_status
-    last_time = time.time()
+    print("bumped", bumped)
+    #last_time = time.time()
     turn_dir = 0
 
 # def choose_dir(laserscan):
@@ -114,6 +116,10 @@ def get_turn_angle(turn):
     angle_to_target = int(degrees(turn.data)) # turn.data is in radians
     initialized = True
 
+def get_dist_to_target(dist):
+    global dist_to_target
+    dist_to_target = dist.data
+
 def timer_callback(event):
     if not initialized:
         return
@@ -131,28 +137,34 @@ def timer_callback(event):
 
     # set up priority of actions
     if bumped:
-        print("bumped")
+        print("action: bumped")
         # decide which way to turn
         if turn_dir == 0:
             if angle_to_target > 0:
                 turn_dir = -1
             else:
                 turn_dir = 1
-        # turn for a set amount of time
-        while time.time() - last_time < 0.3:
-            # back up and turn in the best direction
-            control_msg.speed = -3
-            control_msg.turn_angle = turn_dir * 25
-            control_pub.publish(control_msg)
-        # go straight for a set amount of time to offset from the blocked path
-        while time.time() - last_time < 0.5:
-            control_msg.speed = 3
-            control_msg.turn_angle = 0
-            control_pub.publish(control_msg)
-        bumped = False
-        turn_dir = 0
-    elif almost_bumped:
-        print("that was close")
+        # turn over control to the almost_bumped section
+        almost_bumped = True
+
+        # # turn for a set amount of time
+        # while time.time() - last_time < 0.3:
+        #     # back up and turn in the best direction
+        #     control_msg.speed = -3
+        #     control_msg.turn_angle = turn_dir * 25
+        #     control_pub.publish(control_msg)
+        # # go straight for a set amount of time to offset from the blocked path
+        # while time.time() - last_time < 0.5:
+        #     control_msg.speed = 3
+        #     control_msg.turn_angle = 0
+        #     control_pub.publish(control_msg)
+        # bumped = False
+        # turn_dir = 0
+    if almost_bumped:
+        if bumped:
+            bumped = False
+        else: #don't print both messages
+            print("that was close")
         # backup a bit
         backup_time = 0.4
         last_time = time.time()
@@ -161,7 +173,7 @@ def timer_callback(event):
             control_msg.turn_angle = 0
             control_pub.publish(control_msg)
         # turn according to turn_dir
-        turn_time = 0.7
+        turn_time = 0.6
         last_time = time.time()
         while time.time() - last_time < turn_time:
             control_msg.speed = 2
@@ -192,8 +204,13 @@ def timer_callback(event):
         print("no obstructions")
         # no obstacles in the way. pursue angle to next waypoint
         # modulate speed based on angle
-        control_msg.speed = 4 * (1 - abs(angle_to_target)/30)**2 + 0.5
-        control_msg.turn_angle = angle_to_target
+        control_msg.speed = 5 * (1 - abs(angle_to_target)/30)**5 + 0.5
+        # reduce oscillations with a P-controller
+        P = 0.3
+        # if we are very close to a waypoint, don't clamp the angle as much (prevent missing)
+        if dist_to_target < 6:
+            P = 0.8
+        control_msg.turn_angle = angle_to_target * P
         # correct for really big turns (unlikely)
         if control_msg.turn_angle < -90:
             control_msg.turn_angle += 180
@@ -201,7 +218,7 @@ def timer_callback(event):
         elif control_msg.turn_angle > 90:
             control_msg.turn_angle -= 180
             control_msg.speed *= -1
-    control_pub.publish(control_msg)
+        control_pub.publish(control_msg)
 
 def main():
     global control_pub
@@ -218,6 +235,8 @@ def main():
     bump_sub = rospy.Subscriber("/sim/bumper", Bool, get_bump_status, queue_size=1)
     # subscribe to the LIDAR (updates at 10 Hz)
     scan_sub = rospy.Subscriber("/scan", LaserScan, get_laserscan, queue_size=1)
+    # subscribe to the distance to the current target waypoint
+    dist_sub = rospy.Subscriber("/swc/dist", Float32, get_dist_to_target, queue_size=1)
     
     # Create a timer that calls timer_callback() with a period of 0.1 (10 Hz)
     rospy.Timer(rospy.Duration(0.1), timer_callback)
