@@ -96,7 +96,7 @@ def timer_callback(event):
         almost_bumped = False
         turn_dir = 0
     else:
-        print("no obstructions")
+        #print("no obstructions")
         # no obstacles in the way. pursue angle to next waypoint
         # modulate speed based on angle
         control_msg.speed = 5 * (1 - abs(angle_to_target)/30)**5 + 0.5
