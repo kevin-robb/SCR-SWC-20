@@ -95,7 +95,9 @@ def determine_obstruction():
         return 0
 
     # if there is a forward obstruction (if we got here, there is), it will be the first entry.
+    front_obs = obstacles[0]
     # determing the best heading to command to bypass the obstacle.
+    bypass_hdg = 0
     if len(obstacles) >= 2:
         # if there are at least 2 obstacles, we can define an all_clear region on each side.
         left_clear_range = (obstacles[0][2], obstacles[1][0])
@@ -105,22 +107,27 @@ def determine_obstruction():
         # check which side has more clearance, and command a heading.
         if left_gap > right_gap:
             if left_gap < 50:
-                return (left_clear_range[1] + left_clear_range[0])/2
+                bypass_hdg = (left_clear_range[1] + left_clear_range[0])/2
             else:
-                return left_clear_range[0] + 25
+                bypass_hdg = left_clear_range[0] + 25
         else:
             if right_gap < 50:
-                return (right_clear_range[1] + right_clear_range[0])/2
+                bypass_hdg = (right_clear_range[1] + right_clear_range[0])/2
             else:
-                return right_clear_range[1] - 25
+                bypass_hdg = right_clear_range[1] - 25
     else:
         # there is only one obstacle, straight ahead. 
         # command a heading to bypass it on the side requiring less divergence from current path.
-        front_obs = obstacles[0]
         if abs(front_obs[0]) < abs(front_obs[2]):
-            return obstacles[0][0] + 20
+            bypass_hdg = obstacles[0][0] + 20
         else:
-            return obstacles[0][2] - 20
+            bypass_hdg = obstacles[0][2] - 20
+    # be more agressive the closer the forward obstacle is
+    dist_to_obs = front_obs[1]
+    # scale distance as a percent of clearance
+    dist_to_obs_scaled = dist_to_obs / clearance
+    print("sending bypass_heading")
+    return bypass_hdg / dist_to_obs_scaled
 
 def receive_laserscan(ls):
     global laserscan, meas_min
