@@ -4,6 +4,8 @@
 
     <!-- robot control node -->
     <node pkg="swc_control" type="control_node.py" name="control_node" output="screen" />
+    <!-- laserscan & obstacle detection node -->
+    <node pkg="swc_control" type="scan_node.py" name="scan_node" output="screen" />
     <!-- path planning node -->
     <node pkg="swc_nav" type="path_node.py" name="path_node" output="screen" />
     <!-- localization node -->

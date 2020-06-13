@@ -9,47 +9,29 @@ from sensor_msgs.msg import LaserScan
 
 control_pub = None
 initialized = False
-# ignore obstacles farther away than clearance
-clearance = 1.5
-# desired turn angle to target
+# desired turn angle to target (forward = 0, CW is positive)
 angle_to_target = 0
 dist_to_target = 100
 # bumper status (true if currently bumped)
 bumped = False
-almost_bumped = False
-turn_dir = 0 # -1 = left, 1 = right, 0 = undecided
+# heading to target modified to bypass obstacles
+command_heading = 0
 
 def get_bump_status(bump_status):
     global bumped, turn_dir
     bumped = bump_status
     print("bumped", bumped)
-    turn_dir = 0
-
-def get_laserscan(laserscan):
-    # max LIDAR range is 0.12 to 10.0 meters. gives 0 if too close or sees nothing.
-    # 360 total samples, first one is straight ahead and continuing CCW.
-    meas_min = laserscan.range_min # min (non-zero) measured value
-    global almost_bumped, turn_dir
-    # check front region for obstacles
-    for i in range(-20, 20):
-        if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < clearance:
-            almost_bumped = True
-    # figure out which direction is more obstructed, and turn the other way
-    if almost_bumped:
-        min_l = 100
-        min_r = 100
-        for i in range(0, 30):
-            if laserscan.ranges[i] >= meas_min and laserscan.ranges[i] < min_l:
-                min_l = laserscan.ranges[i]
-            if laserscan.ranges[-i] >= meas_min and laserscan.ranges[-i] < min_r:
-                min_r = laserscan.ranges[-i]
-        # turn away from the closer obstacle (-1 = left, +1 = right)
-        turn_dir = -1 if min_l > min_r else 1
 
 def get_turn_angle(turn):
+    # receive desired heading directly to target
     global angle_to_target, initialized
     angle_to_target = int(degrees(turn.data)) # turn.data is in radians
     initialized = True
+
+def get_bypass_angle(bypass_hdg):
+    # receive commanded heading modification to avoid collisions (from scan_node)
+    global command_heading
+    command_heading = angle_to_target - bypass_hdg.data
 
 def get_dist_to_target(dist):
     global dist_to_target
@@ -58,54 +40,43 @@ def get_dist_to_target(dist):
 def timer_callback(event):
     if not initialized:
         return
-    global bumped, turn_dir, almost_bumped
+    global bumped
     control_msg = Control()
 
-    # check bumpers first
+    # check bumpers first.
     if bumped:
         print("action: bumped")
-        # decide which way to turn
-        if turn_dir == 0:
-            if angle_to_target > 0:
-                turn_dir = -1
-            else:
-                turn_dir = 1
-        # turn over control to the almost_bumped section
-        almost_bumped = True
-    # set up priority of actions
-    if almost_bumped:
-        if bumped:
-            bumped = False
-        else: #don't print both messages
-            print("that was close")
-        # backup a bit
+        # decide which way to turn.
+        turn_dir = 0
+        if command_heading > 0:
+            turn_dir = -1
+        else:
+            turn_dir = 1
+        # back up a bit.
         backup_time = 0.4
         last_time = time.time()
         while time.time() - last_time < backup_time:
             control_msg.speed = -2
             control_msg.turn_angle = 0
             control_pub.publish(control_msg)
-        # turn according to turn_dir
+        # turn according to turn_dir.
         turn_time = 0.6
         last_time = time.time()
         while time.time() - last_time < turn_time:
             control_msg.speed = 2
             control_msg.turn_angle = turn_dir * 25
             control_pub.publish(control_msg)
-        # reset vars
-        almost_bumped = False
-        turn_dir = 0
+        bumped = False
     else:
-        #print("no obstructions")
-        # no obstacles in the way. pursue angle to next waypoint
-        # modulate speed based on angle
-        control_msg.speed = 5 * (1 - abs(angle_to_target)/30)**5 + 0.5
+        # pursue angle to next waypoint.
+        # modulate speed based on angle.
+        control_msg.speed = 5 * (1 - abs(command_heading)/30)**5 + 0.5
         # reduce oscillations with a P-controller
         P = 0.3
         # if we are very close to a waypoint, don't clamp the angle as much (prevent missing)
         if dist_to_target < 6:
             P = 0.6
-        control_msg.turn_angle = angle_to_target * P
+        control_msg.turn_angle = command_heading * P
         # correct for really big turns (unlikely)
         if control_msg.turn_angle < -90:
             control_msg.turn_angle += 180
@@ -128,8 +99,8 @@ def main():
     turn_sub = rospy.Subscriber("/swc/turn_cmd", Float32, get_turn_angle, queue_size=1)
     # subscribe to the front bump sensor
     bump_sub = rospy.Subscriber("/sim/bumper", Bool, get_bump_status, queue_size=1)
-    # subscribe to the LIDAR (updates at 10 Hz)
-    scan_sub = rospy.Subscriber("/scan", LaserScan, get_laserscan, queue_size=1)
+    # subscribe to the scan_node's commanded angle to bypass obstructions
+    bypass_sub = rospy.Subscriber("/swc/bypass", Float32, get_bypass_angle, queue_size=1)
     # subscribe to the distance to the current target waypoint
     dist_sub = rospy.Subscriber("/swc/dist", Float32, get_dist_to_target, queue_size=1)
     
