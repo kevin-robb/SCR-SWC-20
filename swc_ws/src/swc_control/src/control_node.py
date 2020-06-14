@@ -18,7 +18,7 @@ bumped = False
 command_heading = 0
 
 def get_bump_status(bump_status):
-    global bumped, turn_dir
+    global bumped
     bumped = bump_status
     print("bumped", bumped)
 
@@ -70,7 +70,7 @@ def timer_callback(event):
     else:
         # pursue angle to next waypoint.
         # modulate speed based on angle.
-        control_msg.speed = 5 * (1 - abs(command_heading)/30)**5 + 0.5
+        control_msg.speed = 5 * (1 - abs(command_heading)/30)**5 + 1.0 # was + 0.5
         # reduce oscillations with a P-controller
         P = 0.3
         # if we are very close to a waypoint, don't clamp the angle as much (prevent missing)

@@ -13,19 +13,21 @@ laserscan = None
 # min (non-zero) measured value
 meas_min = 0.01
 # ignore obstacles farther away than clearance
-clearance = 1.5
+clearance = 3.5
 
 def obstacle_in_range(index):
     return laserscan.ranges[index] >= meas_min and laserscan.ranges[index] < clearance
 
 def find_obstacles():
+    print("-looking for obstacles")
     # first check if there are any obstacles within range of the robot (on any side)
     no_obstacles_within_range = True
-    for i in range(0, -360):
+    for i in range(0, 360):
         if obstacle_in_range(i):
             no_obstacles_within_range = False
             break
     if no_obstacles_within_range:
+        print("--no obstacles found")
         return None
 
     # find points of importance for each obstacle within range:
@@ -53,6 +55,7 @@ def find_obstacles():
     # search the entire LIDAR range and save indexes of relevant points for each obstacle
     all_clear = True
     for i in range(start_pos, start_pos + 360):
+        print("--loop is running to search for obstacles")
         if obstacle_in_range(i) and all_clear:
             # new obstacle (right side of it)
             obs[0] = i
@@ -73,14 +76,17 @@ def find_obstacles():
             obs = [0, 0, 0]
             closest_dist = clearance
             all_clear = True
+            print("--found an obstacle")
 
     return obstacles
 
 def determine_obstruction():
+    print("determining obstructions")
     # construct a local map of all obstacles to help avoid the forward obstruction.
     obstacles = find_obstacles()
     # if there are no obstacles near the robot, do not modify the current heading
-    if obstacles is None:
+    if obstacles is None or len(obstacles) == 0:
+        print("-no obstacles")
         return 0
 
     # we will say that anything within 20 degrees to either 
@@ -91,6 +97,7 @@ def determine_obstruction():
             obs_ahead = True
     # skip all the computation if there is no obstruction ahead.
     if not obs_ahead:
+        print("-safe to continue straight")
         # command the current heading (no alteration necessary)
         return 0
 
@@ -98,7 +105,9 @@ def determine_obstruction():
     front_obs = obstacles[0]
     # determing the best heading to command to bypass the obstacle.
     bypass_hdg = 0
+    print("-calculating bypass_heading")
     if len(obstacles) >= 2:
+        print("--multiple obstacles around")
         # if there are at least 2 obstacles, we can define an all_clear region on each side.
         left_clear_range = (obstacles[0][2], obstacles[1][0])
         left_gap = left_clear_range[1] - left_clear_range[0]
@@ -116,6 +125,7 @@ def determine_obstruction():
             else:
                 bypass_hdg = right_clear_range[1] - 25
     else:
+        print("--single obstacle ahead")
         # there is only one obstacle, straight ahead. 
         # command a heading to bypass it on the side requiring less divergence from current path.
         if abs(front_obs[0]) < abs(front_obs[2]):
@@ -126,7 +136,7 @@ def determine_obstruction():
     dist_to_obs = front_obs[1]
     # scale distance as a percent of clearance
     dist_to_obs_scaled = dist_to_obs / clearance
-    print("sending bypass_heading")
+    print("-sending bypass_heading")
     return bypass_hdg / dist_to_obs_scaled
 
 def receive_laserscan(ls):
