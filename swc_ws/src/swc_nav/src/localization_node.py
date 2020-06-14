@@ -4,13 +4,16 @@ import rospy
 from math import pi, sqrt
 from tf import transformations
 from std_msgs.msg import Float32
-from sensor_msgs.msg import Imu
+from sensor_msgs.msg import Imu, PointCloud
+from geometry_msgs.msg import Point32
 from swc_msgs.msg import Gps
 from swc_msgs.srv import Waypoints
 
 loc_pub = None
 hdg_pub = None
+pos_pub = None
 dist_pub = None
+path_pub = None
 # robot's current GPS location
 robot_gps = Gps()
 # waypoints
@@ -40,6 +43,17 @@ def interpret_waypoints(waypoints):
     wp_interpreted = True
     print("waypoints interpreted")
 
+    # create list of relative waypoints for pure pursuit path, in METERS
+    wp_list = PointCloud()
+    wp_list.points = []
+    pt = Point32()
+    for i in range(5):
+        # need to reverse sign because longitude increases west (along -x axis)
+        pt.x = -(waypoints.waypoints[i].longitude - waypoints.waypoints[0].longitude) * lon_to_m
+        pt.y = (waypoints.waypoints[i].latitude - waypoints.waypoints[0].latitude) * lat_to_m
+        wp_list.points.append(pt)
+    path_pub.publish(wp_list)
+
 def arrived_at_point(point_gps):
     if point_gps.latitude - robot_gps.latitude < error_margin_lat and point_gps.longitude - robot_gps.longitude < error_margin_lon:
         return True
@@ -49,6 +63,19 @@ def arrived_at_point(point_gps):
 def update_robot_gps(gps_reading):
     global robot_gps, visited
     robot_gps = gps_reading
+
+    # convert to meters relative to start and publish for path_node
+    robot_pos = Point32()
+    # need to reverse sign because longitude increases west (along -x axis)
+    robot_pos.x = -(gps_reading.longitude - start_gps.longitude) * lon_to_m
+    robot_pos.y = (gps_reading.latitude - start_gps.latitude) * lat_to_m
+    # y ~ lat
+    # ^
+    # |   * R
+    # |
+    # S ----> x ~ -lon
+    pos_pub.publish(robot_pos)
+
     # check all the bonus waypoints to see if visited.
     # make sure the waypoints have been interpreted first.
     if wp_interpreted:
@@ -125,7 +152,7 @@ def update_heading(imu_data):
     hdg_pub.publish(current_heading)
 
 def main():
-    global loc_pub, hdg_pub, dist_pub
+    global loc_pub, hdg_pub, pos_pub, dist_pub, path_pub
 
     # Initalize our node in ROS
     rospy.init_node('localization_node')
@@ -134,8 +161,12 @@ def main():
     loc_pub = rospy.Publisher("/swc/goal", Gps, queue_size=1)
     # publish robot's current heading
     hdg_pub = rospy.Publisher("/swc/current_heading", Float32, queue_size=1)
+    # publish robot's current position in meters relative to the start
+    pos_pub = rospy.Publisher("/swc/current_position", Point32, queue_size=1)
     # publish distance to current target waypoint
     dist_pub = rospy.Publisher("/swc/dist", Float32, queue_size=1)
+    # publish set of waypoints as a path that will be used for pure pursuit
+    path_pub = rospy.Publisher("/swc/wp_path", PointCloud, queue_size=1)
 
     # subscribe to robot's current GPS position and IMU data
     gps_sub = rospy.Subscriber("/sim/gps", Gps, update_robot_gps, queue_size=1)

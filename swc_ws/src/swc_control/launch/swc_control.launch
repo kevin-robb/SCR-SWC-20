@@ -7,5 +7,5 @@
     <!-- path planning node -->
     <node pkg="swc_nav" type="path_node.py" name="path_node" output="screen" />
     <!-- localization node -->
-    <node pkg="swc_localization" type="localization_node.py" name="localization_node" output="screen" />
+    <node pkg="swc_nav" type="localization_node.py" name="localization_node" output="screen" />
 </launch>

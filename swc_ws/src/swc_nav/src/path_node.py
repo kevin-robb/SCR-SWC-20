@@ -1,20 +1,40 @@
 #!/usr/bin/env python
 
-import rospy
-from math import atan, pi, degrees
+import rospy #, time
+from math import atan, pi, degrees, atan2
+from sensor_msgs.msg import PointCloud
+from geometry_msgs.msg import Point32
 from std_msgs.msg import Float32
 from swc_msgs.msg import Gps
+from pure_pursuit.pure_pursuit import PurePursuit
+from pure_pursuit.pp_viewer import setup_pyplot, draw_pp
 
 turn_pub = None
-# the robot's current global heading
-robot_heading = 0
+# the robot's current global heading and GPS position
+robot_heading = None
+robot_position = None
 # angle is with respect to the vertical center line, where 0 = straight up and positive is CW
 # should be between -pi and pi (in radians)
 desired_heading = 0
 
+# pure pursuit path
+pp = PurePursuit()
+# specify whether to show the planned path plot
+SHOW_PLOTS = True
+
+# # PID variables
+# integrator = 0
+# last_error = 0.0
+# last_time = time.time()
+
+
 def get_current_heading(heading):
     global robot_heading
     robot_heading = heading.data
+
+def get_current_position(robot_pos):
+    global robot_position
+    robot_position = (robot_pos.x, robot_pos.y)
 
 def get_desired_location(rel_goal_gps):
     global desired_heading
@@ -30,20 +50,94 @@ def get_desired_location(rel_goal_gps):
         desired_heading = pi - alpha
     elif lat_diff < 0 and lon_diff < 0:
         desired_heading = -(pi - alpha)
-    # not sure why, but need to reverse sign
+    # need to reverse sign because longitude increases west (along -x axis)
     desired_heading *= -1
 
 def timer_callback(event): 
     P = 0.3
     turn_angle = Float32()
-    turn_angle.data = (desired_heading - robot_heading) * P
-    # normalize to (-pi, pi)
-    #turn_angle.data = (turn_angle.data + pi) % (2*pi) - pi
+    # turn_angle.data = (desired_heading - robot_heading) * P
+    # # normalize to (-pi, pi)
+    # #turn_angle.data = (turn_angle.data + pi) % (2*pi) - pi    
+
+    # command heading to lookahead point
+    turn_angle.data = (follow_pp_path - robot_heading) * P
     turn_pub.publish(turn_angle)
+
     # for now let the controller worry about speed
     #print("desired heading: ", degrees(desired_heading))
     #print("current heading: ", degrees(robot_heading))
+
+def build_pp_path(wp_path):
+    global pp
+    for i in range(len(wp_path.points)):
+        pp.add_point(wp_path.points[i].x, wp_path.points[i].y)
+
+def follow_pp_path():
+    global integrator, last_time, last_error
+
+    if robot_position is None or robot_heading is None:
+        # wait until localization_node brings in data to do anything
+        return
+
+    # take a snapshot of the current position so it doesn't change while this function is running
+    cur_pos = (robot_position[0], robot_position[1])
+
+    # declare the look-ahead point
+    lookahead = None
+    # start with a search radius of 3 meters
+    radius = 3
+    # look until finding the path at the increasing radius or hitting 2 meters
+    while lookahead is None and radius <= 6: 
+        lookahead = pp.get_lookahead_point(cur_pos[0], cur_pos[1], radius)
+        radius *= 1.25
     
+    # plot the planned path using pp_viewer
+    if SHOW_PLOTS:
+        draw_pp(cur_pos, lookahead, pp.path, xlims=[-15,15], ylims=[-5,30])
+
+    # make sure we actually found the path
+    if lookahead is not None:
+        heading_to_la = degrees(atan2(lookahead[1] - cur_pos[1], lookahead[0] - cur_pos[0]))
+        if heading_to_la <= 0:
+            heading_to_la += 360
+
+        #print("Current Heading: " + str(robot_heading))
+        #print("Desired Heading: " + str(heading_to_la))
+
+        return heading_to_la
+
+        # delta = heading_to_la - robot_heading
+        # delta = (delta + 180) % 360 - 180
+
+        # # PID
+        # error = delta #/ 180
+        # time_diff = max(time.time() - last_time, 0.001)
+        # integrator += error * time_diff
+        # slope = (error - last_error) / time_diff
+
+        # P = 0.005 * error #was 0.002
+        # max_P = 0.25
+        # if abs(P) > max_P:
+        #     # cap P and maintain sign
+        #     P *= max_P/P
+        # I = 0.00001 * integrator
+        # D = 0.0001 * slope
+
+        # drive_power = 1.5
+        # turn_power = P + I + D
+
+        # last_error = error
+        # last_time = time.time()
+
+        # # make the motors command
+        # motor_msg = motors()
+        # motor_msg.left = drive_power - turn_power
+        # motor_msg.right = drive_power + turn_power
+        
+        # command_pub.publish(motor_msg)
+
+#**************************************************************************************************************
 
 def main():
     global turn_pub
@@ -54,9 +148,12 @@ def main():
     # Create publisher for turn angle
     turn_pub = rospy.Publisher("/swc/turn_cmd", Float32, queue_size=1)
 
-    # Create subscribers to get the desired location and current heading
+    # Create subscribers to get the desired relative location, current location, and current heading
     goal_sub = rospy.Subscriber("/swc/goal", Gps, get_desired_location, queue_size=1)
+    pos_sub = rospy.Subscriber("/sim/current_position", Point32, get_current_position, queue_size=1)
     hdg_sub = rospy.Subscriber("/swc/current_heading", Float32, get_current_heading, queue_size=1)
+    # subscribe to the set of waypoints published by localization_node for pure pursuit
+    path_sub = rospy.Subscriber("/swc/wp_path", PointCloud, build_pp_path, queue_size=1)
 
     # Create a timer that calls timer_callback() with a period of 0.1 (10 Hz)
     rospy.Timer(rospy.Duration(0.1), timer_callback)

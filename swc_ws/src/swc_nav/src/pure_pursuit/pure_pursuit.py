@@ -10,6 +10,12 @@ class PurePursuit:
     def add_point(self, x, y):
         self.path.append((x,y))
 
+    # def remove_passed_point(self):
+    #     self.path.pop(0)
+
+    # def insert_point(self, x,y):
+    #     self.path.insert(0, (x,y))
+
     def set_points(self, pts):
         self.path = pts
 
