@@ -31,7 +31,10 @@ def get_turn_angle(turn):
 def get_bypass_angle(bypass_hdg):
     # receive commanded heading modification to avoid collisions (from scan_node)
     global command_heading
-    command_heading = angle_to_target - bypass_hdg.data
+    if bypass_hdg.data == 0:
+        command_heading = angle_to_target - bypass_hdg.data
+    else:
+        command_heading = 180 - bypass_hdg.data #TODO make sure this is right with the coord system
 
 def get_dist_to_target(dist):
     global dist_to_target
@@ -84,6 +87,7 @@ def timer_callback(event):
         elif control_msg.turn_angle > 90:
             control_msg.turn_angle -= 180
             control_msg.speed *= -1
+        print("control heading: ", control_msg.turn_angle)
         control_pub.publish(control_msg)
 
 def main():

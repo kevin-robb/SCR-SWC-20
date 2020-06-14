@@ -13,7 +13,7 @@ laserscan = None
 # min (non-zero) measured value
 meas_min = 0.01
 # ignore obstacles farther away than clearance
-clearance = 3.5
+clearance = 5
 
 def obstacle_in_range(index):
     return laserscan.ranges[index] >= meas_min and laserscan.ranges[index] < clearance
@@ -54,7 +54,7 @@ def find_obstacles():
 
     # search the entire LIDAR range and save indexes of relevant points for each obstacle
     all_clear = True
-    for i in range(start_pos, start_pos + 360):
+    for i in range(start_pos, (start_pos + 360) % 360):
         print("--loop is running to search for obstacles")
         if obstacle_in_range(i) and all_clear:
             # new obstacle (right side of it)
@@ -141,17 +141,50 @@ def determine_obstruction():
 
 def receive_laserscan(ls):
     global laserscan, meas_min
-    # max LIDAR range is 0.12 to 10.0 meters. gives 0 if too close or sees nothing.
-    # 360 total samples, first one is straight ahead and continuing CCW.
     laserscan = ls
     meas_min = laserscan.range_min
 
     # determine if the robot's current path is obstructed, and if so, command a heading to avoid collision.
     # this is called here so the laserscan values do not change while it is running
-    cmd_hdg = determine_obstruction()
+    #cmd_hdg = determine_obstruction()
+    cmd_hdg = simple_avoidance()
+
     bypass_msg = Float32()
     bypass_msg.data = cmd_hdg
     bypass_pub.publish()
+
+def simple_avoidance():
+    if obstacle_in_range(0):
+        # there is an obstacle straight ahead. avoid it by turning.
+        print("obstacle detected ahead")
+        # find position of left and right clearance
+        l_clr = 0
+        r_clr = 0
+        for i in range(355, 180):
+            if not obstacle_in_range(i):
+                print("-right clearance at degrees: ", i)
+                l_clr = i
+                break
+        for i in range(0, 180):
+            if not obstacle_in_range(i):
+                print("-left clearance at degrees: ", i)
+                r_clr = i
+                break
+        if l_clr == 0 and r_clr == 0:
+            print("-no clearance found")
+            return 0
+        # command a heading to the easier side
+        if l_clr < r_clr and l_clr != 0:
+            # pass on the left
+            return l_clr + 15
+        else:
+            # pass on the right
+            return r_clr - 15
+        return 0 #TODO this line should never be reached
+    else:
+        # the way ahead is clear. continue straight.
+        return 0
+
 
 def main():
     global bypass_pub
