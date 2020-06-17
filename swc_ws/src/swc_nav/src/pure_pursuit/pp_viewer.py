@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Taken from https://github.com/SoonerRobotics/nrc_software/blob/demo_sim/nrc_ws/src/nrc_nav/src/pp_viewer.py
 
 import matplotlib as mpl

@@ -61,8 +61,9 @@ def timer_callback(event):
     # #turn_angle.data = (turn_angle.data + pi) % (2*pi) - pi    
 
     # command heading to lookahead point
-    turn_angle.data = (follow_pp_path - robot_heading) * P
-    turn_pub.publish(turn_angle)
+    if robot_heading is not None and robot_position is not None:
+        turn_angle.data = (follow_pp_path() - robot_heading) * P
+        turn_pub.publish(turn_angle)
 
     # for now let the controller worry about speed
     #print("desired heading: ", degrees(desired_heading))
@@ -74,7 +75,7 @@ def build_pp_path(wp_path):
         pp.add_point(wp_path.points[i].x, wp_path.points[i].y)
 
 def follow_pp_path():
-    global integrator, last_time, last_error
+    #global integrator, last_time, last_error
 
     if robot_position is None or robot_heading is None:
         # wait until localization_node brings in data to do anything
