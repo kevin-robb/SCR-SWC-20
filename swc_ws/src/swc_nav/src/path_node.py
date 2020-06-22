@@ -121,7 +121,7 @@ def follow_pp_path():
 
     # Test adding everything below here *******************************************************************
 
-        delta = heading_to_la - robot_heading
+        delta = -(heading_to_la - robot_heading)
         delta = (delta + 180) % 360 - 180
 
         # PID
@@ -130,7 +130,7 @@ def follow_pp_path():
         integrator += error * time_diff
         slope = (error - last_error) / time_diff
 
-        P = 0.05 * error #was 0.005
+        P = 0.005 * error
         max_P = 0.25
         if abs(P) > max_P:
             # cap P and maintain sign
@@ -138,20 +138,12 @@ def follow_pp_path():
         I = 0.00001 * integrator
         D = 0.0001 * slope
 
-        #drive_power = 1.5
         turn_power = P + I + D
 
         last_error = error
         last_time = time.time()
 
-        return -turn_power #TODO added this minus sign on a hunch. it might be wrong.
-
-        # # make the motors command
-        # motor_msg = motors()
-        # motor_msg.left = drive_power - turn_power
-        # motor_msg.right = drive_power + turn_power
-        
-        # command_pub.publish(motor_msg)
+        return turn_power * -3
 
     #********************************************************************************************************
 

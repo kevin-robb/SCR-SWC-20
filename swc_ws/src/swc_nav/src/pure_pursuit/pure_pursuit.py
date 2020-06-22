@@ -29,7 +29,7 @@ class PurePursuit:
         # create a counter that will stop searching after counter_max checks after finding a valid lookahead.
         # this should prevent skipping ahead and missing a waypoint.
         counter = 0
-        counter_max = 50
+        counter_max = 2
         counter_started = False
 
         lookahead = None
