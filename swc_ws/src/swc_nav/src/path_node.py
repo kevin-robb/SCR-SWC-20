@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import rospy #, time
+import rospy, time
 from math import atan, pi, degrees, atan2
 from sensor_msgs.msg import PointCloud
 from geometry_msgs.msg import Point32
@@ -22,10 +22,10 @@ pp = PurePursuit()
 # specify whether to show the planned path plot
 SHOW_PLOTS = True
 
-# # PID variables
-# integrator = 0
-# last_error = 0.0
-# last_time = time.time()
+# PID variables
+integrator = 0
+last_error = 0.0
+last_time = time.time()
 
 
 def get_current_heading(heading):
@@ -56,22 +56,24 @@ def get_desired_location(rel_goal_gps):
     desired_heading *= -1
 
 def timer_callback(event): 
-    P = 0.3
-    turn_angle = Float32()
-    # turn_angle.data = (desired_heading - robot_heading) * P
-    # # normalize to (-pi, pi)
-    # #turn_angle.data = (turn_angle.data + pi) % (2*pi) - pi    
+    P = 0.3 #was 0.003
+    turn_angle = Float32() 
 
     # command heading to lookahead point
     if robot_heading is not None and robot_position is not None:
-        print("Have robot_heading and robot_position")
+        #print("Have robot_heading and robot_position")
         heading_to_la = follow_pp_path()
         if heading_to_la is not None:
+            print("-Attempting to stay on pp path.")
             turn_angle.data = (heading_to_la - robot_heading) * P
             turn_pub.publish(turn_angle)
-            print("-Publishing turn_angle to lookahead")
         else:
-            print("-Cannot find path")
+            print("-Cannot find path. Pursuing next unvisited waypoint.")
+            turn_angle.data = (desired_heading - robot_heading) * P
+            # normalize to (-pi, pi)
+            #turn_angle.data = (turn_angle.data + pi) % (2*pi) - pi
+            turn_pub.publish(turn_angle)
+
 
     # for now let the controller worry about speed
     #print("desired heading: ", degrees(desired_heading))
@@ -84,7 +86,7 @@ def build_pp_path(wp_path):
     pp.display_path()
 
 def follow_pp_path():
-    #global integrator, last_time, last_error
+    global integrator, last_time, last_error
 
     if robot_position is None or robot_heading is None:
         # wait until localization_node brings in data to do anything
@@ -98,13 +100,13 @@ def follow_pp_path():
     # start with a search radius of 3 meters
     radius = 3
     # look until finding the path at the increasing radius or hitting 2 meters
-    while lookahead is None and radius <= 6: 
+    while lookahead is None and radius <= 8: #was 6
         lookahead = pp.get_lookahead_point(cur_pos[0], cur_pos[1], radius)
         radius *= 1.25
     
     # plot the planned path using pp_viewer
     if SHOW_PLOTS:
-        draw_pp(cur_pos, lookahead, pp.path, xlims=[-15,15], ylims=[-5,30])
+        draw_pp(cur_pos, lookahead, pp.path, xlims=[-20,20], ylims=[-5,90])
 
     # make sure we actually found the path
     if lookahead is not None:
@@ -115,30 +117,34 @@ def follow_pp_path():
         #print("Current Heading: " + str(robot_heading))
         #print("Desired Heading: " + str(heading_to_la))
 
-        return heading_to_la
+        #return heading_to_la
 
-        # delta = heading_to_la - robot_heading
-        # delta = (delta + 180) % 360 - 180
+    # Test adding everything below here *******************************************************************
 
-        # # PID
-        # error = delta #/ 180
-        # time_diff = max(time.time() - last_time, 0.001)
-        # integrator += error * time_diff
-        # slope = (error - last_error) / time_diff
+        delta = heading_to_la - robot_heading
+        delta = (delta + 180) % 360 - 180
 
-        # P = 0.005 * error #was 0.002
-        # max_P = 0.25
-        # if abs(P) > max_P:
-        #     # cap P and maintain sign
-        #     P *= max_P/P
-        # I = 0.00001 * integrator
-        # D = 0.0001 * slope
+        # PID
+        error = delta #/ 180
+        time_diff = max(time.time() - last_time, 0.001)
+        integrator += error * time_diff
+        slope = (error - last_error) / time_diff
 
-        # drive_power = 1.5
-        # turn_power = P + I + D
+        P = 0.05 * error #was 0.005
+        max_P = 0.25
+        if abs(P) > max_P:
+            # cap P and maintain sign
+            P *= max_P/P
+        I = 0.00001 * integrator
+        D = 0.0001 * slope
 
-        # last_error = error
-        # last_time = time.time()
+        #drive_power = 1.5
+        turn_power = P + I + D
+
+        last_error = error
+        last_time = time.time()
+
+        return -turn_power #TODO added this minus sign on a hunch. it might be wrong.
 
         # # make the motors command
         # motor_msg = motors()
@@ -147,7 +153,7 @@ def follow_pp_path():
         
         # command_pub.publish(motor_msg)
 
-#**************************************************************************************************************
+    #********************************************************************************************************
 
 def main():
     global turn_pub
