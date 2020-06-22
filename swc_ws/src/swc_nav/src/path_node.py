@@ -30,10 +30,12 @@ SHOW_PLOTS = True
 
 def get_current_heading(heading):
     global robot_heading
+    #print("Got robot_heading")
     robot_heading = heading.data
 
 def get_current_position(robot_pos):
     global robot_position
+    #print("Got robot_position")
     robot_position = (robot_pos.x, robot_pos.y)
 
 def get_desired_location(rel_goal_gps):
@@ -62,8 +64,14 @@ def timer_callback(event):
 
     # command heading to lookahead point
     if robot_heading is not None and robot_position is not None:
-        turn_angle.data = (follow_pp_path() - robot_heading) * P
-        turn_pub.publish(turn_angle)
+        print("Have robot_heading and robot_position")
+        heading_to_la = follow_pp_path()
+        if heading_to_la is not None:
+            turn_angle.data = (heading_to_la - robot_heading) * P
+            turn_pub.publish(turn_angle)
+            print("-Publishing turn_angle to lookahead")
+        else:
+            print("-Cannot find path")
 
     # for now let the controller worry about speed
     #print("desired heading: ", degrees(desired_heading))
@@ -73,6 +81,7 @@ def build_pp_path(wp_path):
     global pp
     for i in range(len(wp_path.points)):
         pp.add_point(wp_path.points[i].x, wp_path.points[i].y)
+    pp.display_path()
 
 def follow_pp_path():
     #global integrator, last_time, last_error
@@ -151,7 +160,7 @@ def main():
 
     # Create subscribers to get the desired relative location, current location, and current heading
     goal_sub = rospy.Subscriber("/swc/goal", Gps, get_desired_location, queue_size=1)
-    pos_sub = rospy.Subscriber("/sim/current_position", Point32, get_current_position, queue_size=1)
+    pos_sub = rospy.Subscriber("/swc/current_position", Point32, get_current_position, queue_size=1)
     hdg_sub = rospy.Subscriber("/swc/current_heading", Float32, get_current_heading, queue_size=1)
     # subscribe to the set of waypoints published by localization_node for pure pursuit
     path_sub = rospy.Subscriber("/swc/wp_path", PointCloud, build_pp_path, queue_size=1)

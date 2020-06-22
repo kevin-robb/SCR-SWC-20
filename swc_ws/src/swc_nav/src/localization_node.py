@@ -46,13 +46,15 @@ def interpret_waypoints(waypoints):
     # create list of relative waypoints for pure pursuit path, in METERS
     wp_list = PointCloud()
     wp_list.points = []
-    pt = Point32()
     for i in range(5):
+        pt = Point32()
         # need to reverse sign because longitude increases west (along -x axis)
         pt.x = -(waypoints.waypoints[i].longitude - waypoints.waypoints[0].longitude) * lon_to_m
         pt.y = (waypoints.waypoints[i].latitude - waypoints.waypoints[0].latitude) * lat_to_m
         wp_list.points.append(pt)
     path_pub.publish(wp_list)
+    #print("Published wp_list:")
+    print(wp_list)
 
 def arrived_at_point(point_gps):
     if point_gps.latitude - robot_gps.latitude < error_margin_lat and point_gps.longitude - robot_gps.longitude < error_margin_lon:
@@ -63,6 +65,7 @@ def arrived_at_point(point_gps):
 def update_robot_gps(gps_reading):
     global robot_gps, visited
     robot_gps = gps_reading
+    #print("Got robot_gps")
 
     # convert to meters relative to start and publish for path_node
     robot_pos = Point32()
@@ -75,6 +78,7 @@ def update_robot_gps(gps_reading):
     # |
     # S ----> x ~ -lon
     pos_pub.publish(robot_pos)
+    #print("Published robot_pos")
 
     # check all the bonus waypoints to see if visited.
     # make sure the waypoints have been interpreted first.

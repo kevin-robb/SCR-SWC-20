@@ -18,6 +18,10 @@ class PurePursuit:
     # def insert_point(self, x,y):
     #     self.path.insert(0, (x,y))
 
+    def display_path(self):
+        for pt in self.path:
+            print(pt)
+
     def set_points(self, pts):
         self.path = pts
 
