@@ -23,6 +23,7 @@ pp = PurePursuit()
 SHOW_PLOTS = True
 
 # PID variables
+using_PID = True
 integrator = 0
 last_error = 0.0
 last_time = time.time()
@@ -65,8 +66,10 @@ def timer_callback(event):
         heading_to_la = follow_pp_path()
         if heading_to_la is not None:
             print("-Attempting to stay on pp path.")
-            #turn_angle.data = (heading_to_la - robot_heading) * P #if PID is disabled
-            turn_angle.data = (heading_to_la) #has already gone through a PID
+            if using_PID:
+                turn_angle.data = (heading_to_la)
+            else:
+                turn_angle.data = (heading_to_la - robot_heading) * P
             # # cap turn at 30 degrees and maintain sign
             # if abs(turn_angle.data) > radians(30):
             #     turn_angle.data *= radians(30) / turn_angle.data
@@ -115,45 +118,42 @@ def follow_pp_path():
 
     # make sure we actually found the path
     if lookahead is not None:
-        # atan2(y,x) returns angle (-pi to pi) which gives info on the quadrant with sign
-        # this angle is 0 on the x-axis and increases CCW
+        # atan2(y,x) returns angle (-pi to pi) which gives info on the quadrant with sign.
+        # this angle is 0 on the x-axis and increases CCW.
         heading_to_la = degrees(atan2(lookahead[1] - cur_pos[1], lookahead[0] - cur_pos[0]))
-        # convert this to our 0=north, pos=CW system
+        # convert this to our 0=north, pos=CW system.
         heading_to_la += -90 # rotate 90 degrees CCW
         heading_to_la *= -1 # flip across y-axis
 
         #print("Current Heading: " + str(robot_heading))
         #print("Desired Heading: " + str(heading_to_la))
 
-        #return radians(heading_to_la)
+        if using_PID:
+            delta = (heading_to_la - degrees(robot_heading))
+            delta = (delta + 180) % 360 - 180
 
-    # Test adding everything below here *******************************************************************
+            # PID
+            error = delta #/ 180
+            time_diff = max(time.time() - last_time, 0.001)
+            integrator += error * time_diff
+            slope = (error - last_error) / time_diff
 
-        delta = (heading_to_la - degrees(robot_heading))
-        delta = (delta + 180) % 360 - 180
+            P = 0.005 * error
+            max_P = 0.25
+            if abs(P) > max_P:
+                # cap P and maintain sign
+                P *= max_P/P
+            I = 0.00001 * integrator
+            D = 0.0001 * slope
 
-        # PID
-        error = delta #/ 180
-        time_diff = max(time.time() - last_time, 0.001)
-        integrator += error * time_diff
-        slope = (error - last_error) / time_diff
+            turn_power = P + I + D
 
-        P = 0.005 * error
-        max_P = 0.25
-        if abs(P) > max_P:
-            # cap P and maintain sign
-            P *= max_P/P
-        I = 0.00001 * integrator
-        D = 0.0001 * slope
+            last_error = error
+            last_time = time.time()
 
-        turn_power = P + I + D
-
-        last_error = error
-        last_time = time.time()
-
-        return turn_power
-
-    #********************************************************************************************************
+            return turn_power
+        else:
+            return radians(heading_to_la)
 
 def main():
     global turn_pub
