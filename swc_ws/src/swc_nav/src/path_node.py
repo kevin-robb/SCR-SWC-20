@@ -10,7 +10,7 @@ from pure_pursuit.pure_pursuit import PurePursuit
 from pure_pursuit.pp_viewer import setup_pyplot, draw_pp
 
 turn_pub = None
-# the robot's current global heading and GPS position
+# the robot's current global heading (radians) and position (meters)
 robot_heading = None
 robot_position = None
 # angle is with respect to the vertical center line, where 0 = straight up and positive is CW
@@ -65,7 +65,8 @@ def timer_callback(event):
         heading_to_la = follow_pp_path()
         if heading_to_la is not None:
             print("-Attempting to stay on pp path.")
-            turn_angle.data = (heading_to_la - robot_heading) * P
+            #turn_angle.data = (heading_to_la - robot_heading) * P #if PID is disabled
+            turn_angle.data = (heading_to_la) #has already gone through a PID
             # # cap turn at 30 degrees and maintain sign
             # if abs(turn_angle.data) > radians(30):
             #     turn_angle.data *= radians(30) / turn_angle.data
@@ -120,41 +121,37 @@ def follow_pp_path():
         # convert this to our 0=north, pos=CW system
         heading_to_la += -90 # rotate 90 degrees CCW
         heading_to_la *= -1 # flip across y-axis
-        
-        # heading_to_la = heading_to_la % 360
-        # if heading_to_la <= 0:
-        #     heading_to_la += 360
 
         #print("Current Heading: " + str(robot_heading))
         #print("Desired Heading: " + str(heading_to_la))
 
-        return radians(heading_to_la)
+        #return radians(heading_to_la)
 
     # Test adding everything below here *******************************************************************
 
-        # delta = (heading_to_la - robot_heading)
-        # delta = (delta + 180) % 360 - 180
+        delta = (heading_to_la - degrees(robot_heading))
+        delta = (delta + 180) % 360 - 180
 
-        # # PID
-        # error = delta #/ 180
-        # time_diff = max(time.time() - last_time, 0.001)
-        # integrator += error * time_diff
-        # slope = (error - last_error) / time_diff
+        # PID
+        error = delta #/ 180
+        time_diff = max(time.time() - last_time, 0.001)
+        integrator += error * time_diff
+        slope = (error - last_error) / time_diff
 
-        # P = 0.005 * error
-        # max_P = 0.25
-        # if abs(P) > max_P:
-        #     # cap P and maintain sign
-        #     P *= max_P/P
-        # I = 0.00001 * integrator
-        # D = 0.0001 * slope
+        P = 0.005 * error
+        max_P = 0.25
+        if abs(P) > max_P:
+            # cap P and maintain sign
+            P *= max_P/P
+        I = 0.00001 * integrator
+        D = 0.0001 * slope
 
-        # turn_power = P + I + D
+        turn_power = P + I + D
 
-        # last_error = error
-        # last_time = time.time()
+        last_error = error
+        last_time = time.time()
 
-        # return turn_power * -3
+        return turn_power
 
     #********************************************************************************************************
 
