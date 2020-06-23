@@ -99,7 +99,7 @@ def timer_callback(event):
         #print("no obstructions")
         # no obstacles in the way. pursue angle to next waypoint
         # modulate speed based on angle
-        control_msg.speed = 5 * (1 - abs(angle_to_target)/30)**5 + 0.5
+        control_msg.speed = 5 * (1.0 - abs(angle_to_target)/30.0)**5 + 0.5
         # reduce oscillations with a P-controller
         P = 0.3
         # if we are very close to a waypoint, don't clamp the angle as much (prevent missing)
@@ -107,13 +107,14 @@ def timer_callback(event):
             P = 0.6
         control_msg.turn_angle = angle_to_target * P
         # correct for really big turns (unlikely)
-        if control_msg.turn_angle < -90:
-            control_msg.turn_angle += 180
-            control_msg.speed *= -1
-        elif control_msg.turn_angle > 90:
-            control_msg.turn_angle -= 180
-            control_msg.speed *= -1
+        # if control_msg.turn_angle < -90:
+        #     control_msg.turn_angle += 180
+        #     control_msg.speed *= -1
+        # elif control_msg.turn_angle > 90:
+        #     control_msg.turn_angle -= 180
+        #     control_msg.speed *= -1
         control_pub.publish(control_msg)
+        print("Told robot to go: (spd, ang)", control_msg.speed, control_msg.turn_angle)
 
 def main():
     global control_pub

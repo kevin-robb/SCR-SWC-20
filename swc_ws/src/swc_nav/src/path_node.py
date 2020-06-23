@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import rospy, time
-from math import atan, pi, degrees, atan2
+from math import atan, pi, degrees, atan2, radians
 from sensor_msgs.msg import PointCloud
 from geometry_msgs.msg import Point32
 from std_msgs.msg import Float32
@@ -66,7 +66,11 @@ def timer_callback(event):
         if heading_to_la is not None:
             print("-Attempting to stay on pp path.")
             turn_angle.data = (heading_to_la - robot_heading) * P
+            # # cap turn at 30 degrees and maintain sign
+            # if abs(turn_angle.data) > radians(30):
+            #     turn_angle.data *= radians(30) / turn_angle.data
             turn_pub.publish(turn_angle)
+            print("-Commanding heading of ", turn_angle.data)
         else:
             print("-Cannot find path. Pursuing next unvisited waypoint.")
             turn_angle.data = (desired_heading - robot_heading) * P
@@ -100,7 +104,7 @@ def follow_pp_path():
     # start with a search radius of 3 meters
     radius = 3
     # look until finding the path at the increasing radius or hitting 2 meters
-    while lookahead is None and radius <= 8: #was 6
+    while lookahead is None and radius <= 5: #was 6
         lookahead = pp.get_lookahead_point(cur_pos[0], cur_pos[1], radius)
         radius *= 1.25
     
@@ -110,40 +114,47 @@ def follow_pp_path():
 
     # make sure we actually found the path
     if lookahead is not None:
+        # atan2(y,x) returns angle (-pi to pi) which gives info on the quadrant with sign
+        # this angle is 0 on the x-axis and increases CCW
         heading_to_la = degrees(atan2(lookahead[1] - cur_pos[1], lookahead[0] - cur_pos[0]))
-        if heading_to_la <= 0:
-            heading_to_la += 360
+        # convert this to our 0=north, pos=CW system
+        heading_to_la += -90 # rotate 90 degrees CCW
+        heading_to_la *= -1 # flip across y-axis
+        
+        # heading_to_la = heading_to_la % 360
+        # if heading_to_la <= 0:
+        #     heading_to_la += 360
 
         #print("Current Heading: " + str(robot_heading))
         #print("Desired Heading: " + str(heading_to_la))
 
-        #return heading_to_la
+        return radians(heading_to_la)
 
     # Test adding everything below here *******************************************************************
 
-        delta = -(heading_to_la - robot_heading)
-        delta = (delta + 180) % 360 - 180
+        # delta = (heading_to_la - robot_heading)
+        # delta = (delta + 180) % 360 - 180
 
-        # PID
-        error = delta #/ 180
-        time_diff = max(time.time() - last_time, 0.001)
-        integrator += error * time_diff
-        slope = (error - last_error) / time_diff
+        # # PID
+        # error = delta #/ 180
+        # time_diff = max(time.time() - last_time, 0.001)
+        # integrator += error * time_diff
+        # slope = (error - last_error) / time_diff
 
-        P = 0.005 * error
-        max_P = 0.25
-        if abs(P) > max_P:
-            # cap P and maintain sign
-            P *= max_P/P
-        I = 0.00001 * integrator
-        D = 0.0001 * slope
+        # P = 0.005 * error
+        # max_P = 0.25
+        # if abs(P) > max_P:
+        #     # cap P and maintain sign
+        #     P *= max_P/P
+        # I = 0.00001 * integrator
+        # D = 0.0001 * slope
 
-        turn_power = P + I + D
+        # turn_power = P + I + D
 
-        last_error = error
-        last_time = time.time()
+        # last_error = error
+        # last_time = time.time()
 
-        return turn_power * -3
+        # return turn_power * -3
 
     #********************************************************************************************************
 
