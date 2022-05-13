@@ -40,7 +40,7 @@ def interpret_waypoints(waypoints):
     print("waypoints interpreted")
 
 def arrived_at_point(point_gps):
-    if point_gps.latitude - robot_gps.latitude < error_margin_lat and point_gps.longitude - robot_gps.longitude < error_margin_lon:
+    if abs(point_gps.latitude - robot_gps.latitude) < error_margin_lat and abs(point_gps.longitude - robot_gps.longitude) < error_margin_lon:
         return True
     else:
         return False

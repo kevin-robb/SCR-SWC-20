@@ -22,7 +22,7 @@ turn_dir = 0 # -1 = left, 1 = right, 0 = undecided
 def get_bump_status(bump_status):
     global bumped, turn_dir
     bumped = bump_status
-    print("bumped", bumped)
+    # print("bumped", bumped)
     turn_dir = 0
 
 def get_laserscan(laserscan):
@@ -63,7 +63,7 @@ def timer_callback(event):
 
     # check bumpers first
     if bumped:
-        print("action: bumped")
+        print("collision!")
         # decide which way to turn
         if turn_dir == 0:
             if angle_to_target > 0:
@@ -77,7 +77,7 @@ def timer_callback(event):
         if bumped:
             bumped = False
         else: #don't print both messages
-            print("that was close")
+            print("that was close.")
         # backup a bit
         backup_time = 0.4
         last_time = time.time()
