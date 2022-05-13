@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import rospy
 import time
@@ -125,13 +125,13 @@ def main():
     control_pub = rospy.Publisher("/sim/control", Control, queue_size=1)
 
     # subscribe to nav's commanded turn angle
-    turn_sub = rospy.Subscriber("/swc/turn_cmd", Float32, get_turn_angle, queue_size=1)
+    rospy.Subscriber("/swc/turn_cmd", Float32, get_turn_angle, queue_size=1)
     # subscribe to the front bump sensor
-    bump_sub = rospy.Subscriber("/sim/bumper", Bool, get_bump_status, queue_size=1)
+    rospy.Subscriber("/sim/bumper", Bool, get_bump_status, queue_size=1)
     # subscribe to the LIDAR (updates at 10 Hz)
-    scan_sub = rospy.Subscriber("/scan", LaserScan, get_laserscan, queue_size=1)
+    rospy.Subscriber("/scan", LaserScan, get_laserscan, queue_size=1)
     # subscribe to the distance to the current target waypoint
-    dist_sub = rospy.Subscriber("/swc/dist", Float32, get_dist_to_target, queue_size=1)
+    rospy.Subscriber("/swc/dist", Float32, get_dist_to_target, queue_size=1)
     
     # Create a timer that calls timer_callback() with a period of 0.1 (10 Hz)
     rospy.Timer(rospy.Duration(0.1), timer_callback)

@@ -1,7 +1,7 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import rospy
-from math import atan, pi, degrees
+from math import atan, pi
 from std_msgs.msg import Float32
 from swc_msgs.msg import Gps
 
@@ -55,8 +55,8 @@ def main():
     turn_pub = rospy.Publisher("/swc/turn_cmd", Float32, queue_size=1)
 
     # Create subscribers to get the desired location and current heading
-    goal_sub = rospy.Subscriber("/swc/goal", Gps, get_desired_location, queue_size=1)
-    hdg_sub = rospy.Subscriber("/swc/current_heading", Float32, get_current_heading, queue_size=1)
+    rospy.Subscriber("/swc/goal", Gps, get_desired_location, queue_size=1)
+    rospy.Subscriber("/swc/current_heading", Float32, get_current_heading, queue_size=1)
 
     # Create a timer that calls timer_callback() with a period of 0.1 (10 Hz)
     rospy.Timer(rospy.Duration(0.1), timer_callback)

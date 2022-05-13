@@ -1,7 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import rospy
-from math import pi, sqrt
 from tf import transformations
 from std_msgs.msg import Float32
 from sensor_msgs.msg import Imu
@@ -104,7 +103,7 @@ def pub_dist_to_next_pt(point_gps):
     # convert dist from GPS to meters
     lat_diff = (point_gps.latitude - robot_gps.latitude) * lat_to_m
     lon_diff = (point_gps.longitude - robot_gps.longitude) * lon_to_m
-    dist.data = sqrt(lat_diff**2 + lon_diff**2)
+    dist.data = (lat_diff**2 + lon_diff**2)**(1/2)
     #print("dist to target:", dist.data)
     dist_pub.publish(dist)
     # used in control_node to allow sharp turns when near the goal to prevent missing it
@@ -138,8 +137,8 @@ def main():
     dist_pub = rospy.Publisher("/swc/dist", Float32, queue_size=1)
 
     # subscribe to robot's current GPS position and IMU data
-    gps_sub = rospy.Subscriber("/sim/gps", Gps, update_robot_gps, queue_size=1)
-    imu_sub = rospy.Subscriber("/sim/imu", Imu, update_heading, queue_size=1)
+    rospy.Subscriber("/sim/gps", Gps, update_robot_gps, queue_size=1)
+    rospy.Subscriber("/sim/imu", Imu, update_heading, queue_size=1)
 
     # Wait for Waypoints service and then request waypoints
     rospy.wait_for_service('/sim/waypoints')
