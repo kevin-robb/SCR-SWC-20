@@ -24,20 +24,20 @@ def interpret_waypoints(waypoints):
     global wp_x, wp_y, offset
     offset = [waypoints.waypoints[0].latitude*lat_to_m, waypoints.waypoints[0].longitude*lon_to_m]
     wp_x = [wp.latitude*lat_to_m-offset[0] for wp in waypoints.waypoints]
-    wp_y = [wp.longitude*lon_to_m-offset[1] for wp in waypoints.waypoints]
+    wp_y = [-1 * wp.longitude*lon_to_m-offset[1] for wp in waypoints.waypoints]
 
 def update_robot_gps(msg):
     if offset is None:
         return
     global veh_x, veh_y
     veh_x.append(msg.latitude*lat_to_m-offset[0])
-    veh_y.append(msg.longitude*lon_to_m-offset[1])
+    veh_y.append(-1 * msg.longitude*lon_to_m-offset[1])
 
 def make_plot():
     plt.figure(figsize=(8,7))
     plt.grid(True)
-    plt.scatter(wp_x, wp_y, s=40, color="yellow", edgecolors="black")
-    plt.scatter(veh_x, veh_y, s=12, color="red")
+    plt.scatter(wp_y, wp_x, s=40, color="yellow", edgecolors="black")
+    plt.scatter(veh_y, veh_x, s=12, color="red")
 
     # other plot formatting.
     plt.xlabel("x (m)")
