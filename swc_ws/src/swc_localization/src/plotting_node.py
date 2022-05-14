@@ -4,14 +4,13 @@ import rospy
 from matplotlib import pyplot as plt
 from swc_msgs.msg import Gps
 from swc_msgs.srv import Waypoints
-import atexit
 
 # list of xy-positions in meters of robot for entire runtime.
 veh_x = []
 veh_y = []
 # 5 waypoints in meters. start, 3 bonus, goal.
-wp_x = []
-wp_y = []
+wp_x = None
+wp_y = None
 # offset all by start pos in meters.
 offset = None
 # GPS -> meters conversions.
@@ -33,37 +32,36 @@ def update_robot_gps(msg):
     veh_x.append(msg.latitude*lat_to_m-offset[0])
     veh_y.append(-1 * msg.longitude*lon_to_m-offset[1])
 
-def make_plot():
-    plt.figure(figsize=(8,7))
-    plt.grid(True)
-    plt.scatter(wp_y, wp_x, s=40, color="yellow", edgecolors="black")
-    plt.scatter(veh_y, veh_x, s=12, color="red")
+    # plot landmarks.
+    if wp_x is not None and wp_y is not None:
+        plt.scatter(wp_y, wp_x, s=40, color="yellow", edgecolors="black")
+    # plot veh pos.
+    # plt.scatter(veh_x, veh_y, s=12, color="green")
+    plt.scatter(veh_y[-1], veh_x[-1], s=12, color="black")
 
-    # other plot formatting.
+    plt.axis("equal")
     plt.xlabel("x (m)")
     plt.ylabel("y (m)")
-    plt.title("SWC Trajectory")
-    plt.tight_layout()
-    # save to a file in plots/ directory.
-    # plt.savefig("./plots/"+FILE_ID+".png", format='png')
-    # show the plot.
-    plt.show()
-
+    plt.title("Ground Truth Trajectory and Waypoints")
+    plt.draw()
+    plt.pause(0.00000000001)
 
 def main():
     rospy.init_node('plotting_node')
 
-    # when the node exits, make the plot.
-    atexit.register(make_plot)
-
     # subscribe to robot's current GPS position.
-    rospy.Subscriber("/sim/gps", Gps, update_robot_gps, queue_size=1)
+    # rospy.Subscriber("/sim/gps", Gps, update_robot_gps, queue_size=1)
+    rospy.Subscriber("/truth/gps", Gps, update_robot_gps, queue_size=1)
 
     # Wait for Waypoints service and then request waypoints
     rospy.wait_for_service('/sim/waypoints')
     waypoints = rospy.ServiceProxy('/sim/waypoints', Waypoints)()
     # Create GPS variables of the waypoints
     interpret_waypoints(waypoints)
+
+    # init the plot.
+    plt.ion()
+    plt.show()
 
     # pump callbacks
     rospy.spin()
